@@ -410,12 +410,15 @@ export default function App() {
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
       var slots=next[oi][type];
-      var idx=slots.findIndex(function(s){return s.id===sid;});
+      if(!slots) return prev;
+      var idx=-1;
+      for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
-      var s=slots[idx];
+      /* Snapshot all OTHER slots' hex values to verify we don't touch them */
       var otherHues=[]; var otherPairs=[];
       for(var j=0;j<slots.length;j++){if(j!==idx){otherHues.push(slots[j].hue);otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}}
-      /* Try candidates for perceptual + hue distinction */
+      /* Find a new distinct color */
+      var s=slots[idx];
       var best=null, bestDist=0;
       for(var attempt=0;attempt<40;attempt++){
         var candidate=(s.hue+30+Math.floor(Math.random()*120))%360;
@@ -427,10 +430,12 @@ export default function App() {
         if(d>bestDist){bestDist=d;best={hue:candidate,sat:satOpt,pair:p};}
       }
       if(!best){best={hue:(s.hue+60)%360,sat:s.sat,pair:makePair((s.hue+60)%360,s.sat,darkStroke)};}
-      s.hue=best.hue; s.sat=best.sat;
-      s.lightHex=best.pair.lightHex; s.darkHex=best.pair.darkHex;
-      s.label="H"+Math.round(s.hue)+"\u00B0"; s.swapped=null;
-      next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
+      /* ONLY modify this one slot */
+      slots[idx]={id:s.id, hue:best.hue, sat:best.sat, lightHex:best.pair.lightHex, darkHex:best.pair.darkHex, label:"H"+Math.round(best.hue)+"\u00B0", swapped:null};
+      /* Only rebuild spectrum if we changed a categorical slot */
+      if(type==="categorical"){
+        next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
+      }
       return next;
     });
   },[darkStroke]);
@@ -440,13 +445,18 @@ export default function App() {
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
       var slots=next[oi][type];
-      var idx=slots.findIndex(function(s){return s.id===sid;});
+      if(!slots) return prev;
+      var idx=-1;
+      for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
       var s=slots[idx];
-      s.sat=((s.sat+15-30)%60)+30;
-      var pair=makePair(s.hue,s.sat,darkStroke);
-      s.lightHex=pair.lightHex; s.darkHex=pair.darkHex;
-      next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
+      var newSat=((s.sat+15-30)%60)+30;
+      var pair=makePair(s.hue,newSat,darkStroke);
+      /* ONLY modify this one slot */
+      slots[idx]={id:s.id, hue:s.hue, sat:newSat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:s.label, swapped:s.swapped};
+      if(type==="categorical"){
+        next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
+      }
       return next;
     });
   },[darkStroke]);
@@ -456,14 +466,16 @@ export default function App() {
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
       var slots=next[oi][type];
-      var idx=slots.findIndex(function(s){return s.id===sid;});
+      if(!slots) return prev;
+      var idx=-1;
+      for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
-      var s=slots[idx]; s.hue=newH; s.sat=newS;
+      var s=slots[idx];
       var startHex=hsl2hex(newH,newS,newL);
-      s.lightHex=adjustForContrast(startHex,"#ffffff",4.5);
-      s.darkHex=adjustForContrast(startHex,darkStroke,4.5);
-      s.label="H"+Math.round(newH)+"\u00B0"; s.swapped=null;
-      next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
+      slots[idx]={id:s.id, hue:newH, sat:newS, lightHex:adjustForContrast(startHex,"#ffffff",4.5), darkHex:adjustForContrast(startHex,darkStroke,4.5), label:"H"+Math.round(newH)+"\u00B0", swapped:null};
+      if(type==="categorical"){
+        next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
+      }
       return next;
     });
   },[darkStroke,activeOpt]);
