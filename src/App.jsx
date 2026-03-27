@@ -227,7 +227,7 @@ function Swatch(props) {
 function OptionPanel(props) {
   var pal=props.pal,isDark=props.isDark,stroke=props.stroke,darkBg=props.darkBg;
   var activeTab=props.activeTab,onHue=props.onHue,onLight=props.onLight,onSelect=props.onSelect;
-  var mode=isDark?"D":"L"; var mainSlots=pal[activeTab]||[]; var semSlots=pal.semantic||[]; var deemSlots=pal.deemphasis||[];
+  var mode=isDark?"D":"L"; var catSlots=pal.categorical||[]; var specSlots=pal.spectrum||[]; var semSlots=pal.semantic||[]; var deemSlots=pal.deemphasis||[];
   function SL(lp){return (<div style={{marginBottom:4,marginTop:14,display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:"0.08em",color:"#555"}}>{lp.text}</span>{lp.sub&&<span style={{fontSize:12,color:"#bbb",fontFamily:"'Space Mono',monospace"}}>{lp.sub}</span>}</div>);}
   function renderSwatches(slots,type){return (<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{slots.map(function(s){var hex=isDark?s.darkHex:s.lightHex;return (<Swatch key={type+"-"+s.id+"-"+s.hue+"-"+mode} hex={hex} stroke={stroke} isDark={isDark} darkBg={darkBg} onHue={onHue?function(){onHue(type,s.id);}:null} onLight={onLight?function(){onLight(type,s.id);}:null} onSelect={onSelect} label={s.label} slotId={s.id} slotType={type} />);})}</div>);}
   return (
@@ -237,14 +237,20 @@ function OptionPanel(props) {
         <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:21,letterSpacing:"0.08em",color:"#222"}}>{mode} · {stroke==="#ffffff"?"White":"Dark"} Stroke</span>
         <span style={{fontSize:12,color:"#bbb",fontFamily:"'Space Mono',monospace"}}>AA 4.5:1 vs {isDark?darkBg:"#FFF"}</span>
       </div>
-      <SL text={activeTab==="spectrum"?"Spectrum":"Categorical"} sub={activeTab==="spectrum"?"sorted by hue":"max neighbor contrast"} />
-      {renderSwatches(mainSlots,"categorical")}
-      {activeTab==="spectrum"&&(<div style={{borderRadius:6,padding:8,backgroundColor:"#f8f8f8",border:"1px solid #eee",marginBottom:8}}><span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#ccc",display:"block",marginBottom:3}}>Rainbow ramp</span><div style={{display:"flex",height:24,borderRadius:4,overflow:"hidden"}}>{mainSlots.map(function(s,i){return <div key={i} style={{flex:1,backgroundColor:isDark?s.darkHex:s.lightHex}} />;})}</div></div>)}
+      <SL text="Categorical" sub="max neighbor contrast" />
+      {renderSwatches(catSlots,"categorical")}
+      {activeTab==="spectrum"&&(<div>
+        <SL text="Spectrum" sub="sorted by hue" />
+        <div style={{borderRadius:6,padding:8,backgroundColor:"#f8f8f8",border:"1px solid #eee",marginBottom:8}}>
+          <div style={{display:"flex",height:24,borderRadius:4,overflow:"hidden",marginBottom:6}}>{specSlots.map(function(s,i){return <div key={i} style={{flex:1,backgroundColor:isDark?s.darkHex:s.lightHex}} />;})}</div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{specSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+stroke,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:s.label,slotId:s.id,slotType:"categorical",onHue:onHue?function(){onHue("categorical",s.id);}:null,onLight:onLight?function(){onLight("categorical",s.id);}:null});}} title={hex} />);})}</div>
+        </div>
+      </div>)}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
-        <BarChart slots={mainSlots} dark={false} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><DonutChart slots={mainSlots} dark={false} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><LineChart slots={mainSlots} dark={false} darkBg={darkBg} useLight={!isDark} />
+        <BarChart slots={catSlots} dark={false} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><DonutChart slots={catSlots} dark={false} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><LineChart slots={catSlots} dark={false} darkBg={darkBg} useLight={!isDark} />
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:6}}>
-        <BarChart slots={mainSlots} dark={true} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><DonutChart slots={mainSlots} dark={true} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><LineChart slots={mainSlots} dark={true} darkBg={darkBg} useLight={!isDark} />
+        <BarChart slots={catSlots} dark={true} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><DonutChart slots={catSlots} dark={true} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><LineChart slots={catSlots} dark={true} darkBg={darkBg} useLight={!isDark} />
       </div>
       <SL text="Semantic" sub="success / warning / error" />
       {renderSwatches(semSlots,"semantic")}
@@ -358,7 +364,7 @@ export default function App() {
   var _brands=useState({}),_actBrand=useState(null),_brandColors=useState([]),_opts=useState([null,null,null]);
   var _actOpt=useState(0),_darkStroke=useState("#032054"),_selInfo=useState(null),_showUpload=useState(false);
   var _uploadName=useState(""),_toast=useState(""),_loaded=useState(false),_activeTab=useState("categorical");
-  var _compare=useState(false),_brandDD=useState(false),_reworkSeed=useState(0);
+  var _compare=useState(false),_brandDD=useState(false),_reworkSeed=useState(0),_pptModal=useState(null);
   var fileRef=useRef(null);
   var brands=_brands[0],setBrands=_brands[1],activeBrand=_actBrand[0],setActiveBrand=_actBrand[1];
   var brandColors=_brandColors[0],setBrandColors=_brandColors[1],opts=_opts[0],setOpts=_opts[1];
@@ -368,6 +374,7 @@ export default function App() {
   var loaded=_loaded[0],setLoaded=_loaded[1],activeTab=_activeTab[0],setActiveTab=_activeTab[1];
   var compare=_compare[0],setCompare=_compare[1],brandDD=_brandDD[0],setBrandDD=_brandDD[1];
   var reworkSeed=_reworkSeed[0],setReworkSeed=_reworkSeed[1];
+  var pptModal=_pptModal[0],setPptModal=_pptModal[1];
   function show(msg){setToast(msg);setTimeout(function(){setToast("");},2500);}
   function regen(bc,ds,seed){setOpts([generatePalettes(bc,0,ds,seed),generatePalettes(bc,1,ds,seed),generatePalettes(bc,2,ds,seed)]);}
 
@@ -388,6 +395,28 @@ export default function App() {
   function savePalettes(){if(activeBrand){sSet("dvcs-pal-"+activeBrand,opts);show("Saved!");}else{show("Upload a brand first");}}
 
   function reworkAll(){var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);regen(brandColors,darkStroke,newSeed);show("Reworked!");}
+
+  function copyPptXml(isDk, includeSpectrum) {
+    if (!cur) return;
+    function hx(hex) { return hex.replace("#","").toUpperCase(); }
+    function row(name, hex) { return '    <a:custClr name="'+name+'">\n        <a:srgbClr val="'+hx(hex)+'" />\n    </a:custClr>'; }
+    function blank() { return '    <a:custClr name="">\n        <a:srgbClr val="FFFFFF" />\n    </a:custClr>'; }
+    var lines = ['<a:custClrLst>'];
+    cur.categorical.forEach(function(s,i) { lines.push(row("Categorical "+(i+1), isDk?s.darkHex:s.lightHex)); });
+    lines.push(blank());
+    if (includeSpectrum) {
+      cur.spectrum.forEach(function(s,i) { lines.push(row("Spectrum "+(i+1), isDk?s.darkHex:s.lightHex)); });
+      lines.push(blank());
+    }
+    cur.semantic.forEach(function(s,i) { lines.push(row("Semantic "+(i+1), isDk?s.darkHex:s.lightHex)); });
+    for(var p=0;p<7;p++) lines.push(blank());
+    cur.deemphasis.forEach(function(s,i) { lines.push(row("Deemphasis "+(i+1), isDk?s.darkHex:s.lightHex)); });
+    for(var q=0;q<7;q++) lines.push(blank());
+    lines.push('</a:custClrLst>');
+    navigator.clipboard.writeText(lines.join("\n"));
+    show("PPT XML copied!");
+    setPptModal(null);
+  }
 
   var handleUpload=useCallback(function(file){
     if(!file||!uploadName.trim())return;
@@ -529,13 +558,17 @@ export default function App() {
         </div>
         {/* Color Tables */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:16}}>
-          {[false,true].map(function(isDk){var label=isDk?"D Colors":"L Colors";var allSlots=[].concat((cur[activeTab]||cur.categorical).map(function(s){return {hex:isDk?s.darkHex:s.lightHex};}),cur.semantic.map(function(s){return {hex:isDk?s.darkHex:s.lightHex};}),cur.deemphasis.map(function(s){return {hex:isDk?s.darkHex:s.lightHex};}));
+          {[false,true].map(function(isDk){var label=isDk?"D Colors":"L Colors";var allSlots=[].concat(cur.categorical.map(function(s){return {hex:isDk?s.darkHex:s.lightHex};}),cur.semantic.map(function(s){return {hex:isDk?s.darkHex:s.lightHex};}),cur.deemphasis.map(function(s){return {hex:isDk?s.darkHex:s.lightHex};}));
             var cmykData=allSlots.map(function(s){var rgb=h2r(s.hex);var pms=findPMS(s.hex);return pms||r2cmyk(rgb.r,rgb.g,rgb.b);});
             function copyHexes(){var txt=allSlots.map(function(s){return s.hex.toUpperCase();}).join("\n");navigator.clipboard.writeText(txt);show("Hex values copied!");}
             function copyCMYK(){var txt=cmykData.map(function(ck){return ck.c+"\t"+ck.m+"\t"+ck.y+"\t"+ck.k;}).join("\n");navigator.clipboard.writeText(txt);show("CMYK values copied!");}
             var copyIcon=<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="1" width="10" height="10" rx="2" /><path d="M5 5h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5" /></svg>;
             var copyBtnStyle={border:"none",backgroundColor:"transparent",color:"#bbb",cursor:"pointer",padding:2,display:"inline-flex",alignItems:"center",verticalAlign:"middle",marginLeft:3};
-            return (<div key={isDk?"dt":"lt"}><div style={{fontSize:14,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#555",marginBottom:6}}>{label}</div><table style={{width:"100%",borderCollapse:"collapse",fontFamily:"'Space Mono',monospace",fontSize:11}}><thead><tr style={{borderBottom:"2px solid #333"}}><th style={{textAlign:"left",padding:"4px 6px",color:"#999",fontSize:10}}></th><th style={{textAlign:"left",padding:"4px 6px",color:"#999",fontSize:10}}>Hex<button onClick={copyHexes} style={copyBtnStyle} title="Copy all hex values">{copyIcon}</button></th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>C</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>M</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>Y</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>K<button onClick={copyCMYK} style={copyBtnStyle} title="Copy all CMYK values">{copyIcon}</button></th></tr></thead><tbody>{allSlots.map(function(s,i){var ck=cmykData[i];return (<tr key={i} style={{borderBottom:"1px solid #eee"}}><td style={{padding:"4px 6px"}}><div style={{width:20,height:20,borderRadius:4,backgroundColor:s.hex,border:"1px solid #ddd"}} /></td><td style={{padding:"4px 6px",fontWeight:700,color:"#222"}}>{s.hex.toUpperCase()}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.c}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.m}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.y}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.k}</td></tr>);})}</tbody></table></div>);
+            return (<div key={isDk?"dt":"lt"}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                <div style={{fontSize:14,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#555"}}>{label}</div>
+                <button onClick={function(){setPptModal(isDk);}} style={{padding:"3px 10px",borderRadius:4,border:"1px solid #ddd",backgroundColor:"#fff",color:"#666",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Space Mono',monospace"}}>Copy PPT XML</button>
+              </div><table style={{width:"100%",borderCollapse:"collapse",fontFamily:"'Space Mono',monospace",fontSize:11}}><thead><tr style={{borderBottom:"2px solid #333"}}><th style={{textAlign:"left",padding:"4px 6px",color:"#999",fontSize:10}}></th><th style={{textAlign:"left",padding:"4px 6px",color:"#999",fontSize:10}}>Hex<button onClick={copyHexes} style={copyBtnStyle} title="Copy all hex values">{copyIcon}</button></th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>C</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>M</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>Y</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>K<button onClick={copyCMYK} style={copyBtnStyle} title="Copy all CMYK values">{copyIcon}</button></th></tr></thead><tbody>{allSlots.map(function(s,i){var ck=cmykData[i];return (<tr key={i} style={{borderBottom:"1px solid #eee"}}><td style={{padding:"4px 6px"}}><div style={{width:20,height:20,borderRadius:4,backgroundColor:s.hex,border:"1px solid #ddd"}} /></td><td style={{padding:"4px 6px",fontWeight:700,color:"#222"}}>{s.hex.toUpperCase()}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.c}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.m}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.y}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.k}</td></tr>);})}</tbody></table></div>);
           })}
         </div>
         <div style={{marginTop:10,fontSize:11,color:"#bbb",fontFamily:"'Space Mono',monospace",textAlign:"center"}}>PMS Bridge Coated CMYK used where available. All colors WCAG AA 4.5:1.</div>
@@ -550,6 +583,20 @@ export default function App() {
           <div style={{display:"flex",gap:6}}><button onClick={function(){if(uploadName.trim())fileRef.current.click();else show("Enter a name");}} style={{flex:1,padding:9,borderRadius:7,border:"none",backgroundColor:uploadName.trim()?"#222":"#ccc",color:"#fff",fontWeight:700,fontSize:14,cursor:uploadName.trim()?"pointer":"not-allowed"}}>Choose File</button><button onClick={function(){setShowUpload(false);}} style={{padding:"9px 14px",borderRadius:7,border:"1px solid #ddd",backgroundColor:"#fff",color:"#888",fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button></div>
         </div>
       </div>)}
+
+      {/* PPT XML Modal */}
+      {pptModal!==null&&(<div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={function(){setPptModal(null);}}>
+        <div style={{backgroundColor:"#fff",borderRadius:12,maxWidth:320,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}} onClick={function(e){e.stopPropagation();}}>
+          <h3 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,marginBottom:6}}>PPT Custom Colors</h3>
+          <p style={{fontSize:13,color:"#888",marginBottom:16,fontFamily:"'Space Mono',monospace"}}>Do you want Spectrum colors?</p>
+          <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+            <button onClick={function(){copyPptXml(pptModal,true);}} style={{flex:1,padding:"10px 16px",borderRadius:7,border:"none",backgroundColor:"#333",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Yes</button>
+            <button onClick={function(){copyPptXml(pptModal,false);}} style={{flex:1,padding:"10px 16px",borderRadius:7,border:"1px solid #ddd",backgroundColor:"#fff",color:"#333",fontWeight:700,fontSize:14,cursor:"pointer"}}>No</button>
+          </div>
+          <button onClick={function(){setPptModal(null);}} style={{marginTop:10,border:"none",backgroundColor:"transparent",color:"#bbb",fontSize:12,cursor:"pointer"}}>Cancel</button>
+        </div>
+      </div>)}
+
       {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} />}
     </div>
   );
