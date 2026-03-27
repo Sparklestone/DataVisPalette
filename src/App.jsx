@@ -235,7 +235,7 @@ function BarChart(props) {
   var mx = 82;
   return (
     <div style={{ borderRadius: 8, padding: 10, backgroundColor: bg, border: "1px solid " + (dark ? "rgba(255,255,255,0.08)" : "#eee") }}>
-      <span style={{ fontSize: 7, fontFamily: "'Space Mono',monospace", color: dark ? "rgba(255,255,255,0.3)" : "#bbb", display: "block", marginBottom: 4 }}>
+      <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: dark ? "rgba(255,255,255,0.3)" : "#bbb", display: "block", marginBottom: 4 }}>
         Bar · {dark ? "dark bg" : "light bg"}
       </span>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 50 }}>
@@ -273,7 +273,7 @@ function DonutChart(props) {
   });
   return (
     <div style={{ borderRadius: 8, padding: 10, backgroundColor: bg, border: "1px solid " + (dark ? "rgba(255,255,255,0.08)" : "#eee"), display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <span style={{ fontSize: 7, fontFamily: "'Space Mono',monospace", color: dark ? "rgba(255,255,255,0.3)" : "#bbb", display: "block", marginBottom: 4, alignSelf: "flex-start" }}>
+      <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: dark ? "rgba(255,255,255,0.3)" : "#bbb", display: "block", marginBottom: 4, alignSelf: "flex-start" }}>
         Donut · {dark ? "dark bg" : "light bg"}
       </span>
       <svg viewBox="0 0 96 96" width="80" height="80">{paths}</svg>
@@ -300,7 +300,7 @@ function LineChart(props) {
   });
   return (
     <div style={{ borderRadius: 8, padding: 10, backgroundColor: bg, border: "1px solid " + (dark ? "rgba(255,255,255,0.08)" : "#eee") }}>
-      <span style={{ fontSize: 7, fontFamily: "'Space Mono',monospace", color: dark ? "rgba(255,255,255,0.3)" : "#bbb", display: "block", marginBottom: 4 }}>
+      <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: dark ? "rgba(255,255,255,0.3)" : "#bbb", display: "block", marginBottom: 4 }}>
         Line · {dark ? "dark bg" : "light bg"}
       </span>
       <svg viewBox={"0 0 " + W + " " + H} width="100%" height={H}>{lines}</svg>
@@ -347,11 +347,11 @@ function Swatch(props) {
         )}
       </div>
       <div style={{ padding: "4px 6px 5px" }}>
-        <div style={{ fontSize: 8.5, fontWeight: 700, color: txtCol, fontFamily: "'Space Mono',monospace" }}>{hex.toUpperCase()}</div>
-        <div style={{ fontSize: 7, color: subCol, fontFamily: "'Space Mono',monospace" }}>PMS {p ? p.name : "-"}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: txtCol, fontFamily: "'Space Mono',monospace" }}>{hex.toUpperCase()}</div>
+        <div style={{ fontSize: 11, color: subCol, fontFamily: "'Space Mono',monospace" }}>PMS {p ? p.name : "-"}</div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 6.5, color: subCol, fontFamily: "'Space Mono',monospace" }}>{p ? p.c + "/" + p.m + "/" + p.y + "/" + p.k : cmyk.c + "/" + cmyk.m + "/" + cmyk.y + "/" + cmyk.k}</span>
-          <span style={{ fontSize: 6.5, fontWeight: 700, color: rCol, fontFamily: "'Space Mono',monospace" }}>{ratio}:1</span>
+          <span style={{ fontSize: 10, color: subCol, fontFamily: "'Space Mono',monospace" }}>{p ? p.c + "/" + p.m + "/" + p.y + "/" + p.k : cmyk.c + "/" + cmyk.m + "/" + cmyk.y + "/" + cmyk.k}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: rCol, fontFamily: "'Space Mono',monospace" }}>{ratio}:1</span>
         </div>
       </div>
     </div>
@@ -370,10 +370,10 @@ function OptionPanel(props) {
   function SectionLabel(lp) {
     return (
       <div style={{ marginBottom: 4, marginTop: 14, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 12, letterSpacing: "0.08em", color: isDark ? "#999" : "#555" }}>
+        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: "0.08em", color: isDark ? "#999" : "#555" }}>
           {lp.text}
         </span>
-        {lp.sub && <span style={{ fontSize: 8, color: isDark ? "#555" : "#bbb", fontFamily: "'Space Mono',monospace" }}>{lp.sub}</span>}
+        {lp.sub && <span style={{ fontSize: 12, color: isDark ? "#555" : "#bbb", fontFamily: "'Space Mono',monospace" }}>{lp.sub}</span>}
       </div>
     );
   }
@@ -383,10 +383,10 @@ function OptionPanel(props) {
       {/* Header */}
       <div style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
         <div style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: stroke, border: "1px solid " + (isDark ? "rgba(255,255,255,0.15)" : "#ddd") }} />
-        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, letterSpacing: "0.08em", color: isDark ? "#ccc" : "#222" }}>
+        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 21, letterSpacing: "0.08em", color: isDark ? "#ccc" : "#222" }}>
           {mode} · {stroke === "#ffffff" ? "White" : "Dark"} Stroke
         </span>
-        <span style={{ fontSize: 8, color: isDark ? "#555" : "#bbb", fontFamily: "'Space Mono',monospace" }}>
+        <span style={{ fontSize: 12, color: isDark ? "#555" : "#bbb", fontFamily: "'Space Mono',monospace" }}>
           WCAG AA 4.5:1 vs {isDark ? darkBg : "#FFF"}
         </span>
       </div>
@@ -408,7 +408,7 @@ function OptionPanel(props) {
       {/* Spectrum ramp (if on spectrum tab) */}
       {activeTab === "spectrum" && (
         <div style={{ borderRadius: 6, padding: 8, backgroundColor: isDark ? darkBg : "#fff", border: "1px solid " + (isDark ? "rgba(255,255,255,0.08)" : "#eee"), marginBottom: 8 }}>
-          <span style={{ fontSize: 7, fontFamily: "'Space Mono',monospace", color: isDark ? "rgba(255,255,255,0.25)" : "#ccc", display: "block", marginBottom: 3 }}>Rainbow ramp</span>
+          <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: isDark ? "rgba(255,255,255,0.25)" : "#ccc", display: "block", marginBottom: 3 }}>Rainbow ramp</span>
           <div style={{ display: "flex", height: 24, borderRadius: 4, overflow: "hidden" }}>
             {mainSlots.map(function (s, i) {
               return <div key={i} style={{ flex: 1, backgroundColor: isDark ? s.darkHex : s.lightHex }} />;
@@ -455,8 +455,8 @@ function OptionPanel(props) {
                 return (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
                     <div style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: hex, border: "1px solid " + stroke, flexShrink: 0 }} />
-                    <span style={{ color: hex, fontWeight: 700, fontSize: 9 }}>{s.label}</span>
-                    <span style={{ fontSize: 6.5, fontWeight: 700, color: "#fff", backgroundColor: nn >= 4.5 ? "#1a7a3d" : "#c42b2b", padding: "1px 3px", borderRadius: 2 }}>{ratio}:1</span>
+                    <span style={{ color: hex, fontWeight: 700, fontSize: 14 }}>{s.label}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", backgroundColor: nn >= 4.5 ? "#1a7a3d" : "#c42b2b", padding: "1px 3px", borderRadius: 2 }}>{ratio}:1</span>
                   </div>
                 );
               })}
@@ -496,7 +496,7 @@ function ColorDetail(props) {
     var lv = nn >= 7 ? "AAA" : nn >= 4.5 ? "AA" : nn >= 3 ? "AA Lg" : "Fail";
     var bg = nn >= 4.5 ? "#1a7a3d" : nn >= 3 ? "#9e6c00" : "#c42b2b";
     return (
-      <span style={{ fontSize: 8, fontWeight: 700, color: "#fff", backgroundColor: bg, padding: "1px 5px", borderRadius: 3, marginLeft: 4 }}>{lv} {bp.v}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", backgroundColor: bg, padding: "1px 5px", borderRadius: 3, marginLeft: 4 }}>{lv} {bp.v}</span>
     );
   }
 
@@ -504,10 +504,10 @@ function ColorDetail(props) {
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(5px)" }} onClick={onClose}>
       <div style={{ backgroundColor: "#fff", borderRadius: 14, maxWidth: 320, width: "100%", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={function (e) { e.stopPropagation(); }}>
         <div style={{ height: 100, backgroundColor: info.hex, color: fg, display: "flex", alignItems: "flex-end", padding: 12 }}>
-          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, letterSpacing: "0.06em" }}>{info.label || "Color"}</div>
+          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 30, letterSpacing: "0.06em" }}>{info.label || "Color"}</div>
         </div>
         <div style={{ padding: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontFamily: "'Space Mono',monospace", fontSize: 10, marginBottom: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontFamily: "'Space Mono',monospace", fontSize: 15, marginBottom: 8 }}>
             <div><span style={{ color: "#aaa" }}>HEX</span><br /><b>{info.hex.toUpperCase()}</b></div>
             <div><span style={{ color: "#aaa" }}>RGB</span><br /><b>{rgb.r},{rgb.g},{rgb.b}</b></div>
             <div><span style={{ color: "#aaa" }}>HSL</span><br /><b>{Math.round(hsl.h)}° {Math.round(hsl.s)}% {Math.round(hsl.l)}%</b></div>
@@ -516,14 +516,14 @@ function ColorDetail(props) {
           {p && (
             <div style={{ borderTop: "1px solid #eee", paddingTop: 6, marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 16, height: 16, borderRadius: 3, backgroundColor: p.hex, border: "1px solid #ddd" }} />
-              <span style={{ fontFamily: "'Space Mono',monospace", fontSize: 9, fontWeight: 700 }}>PMS {p.name}</span>
+              <span style={{ fontFamily: "'Space Mono',monospace", fontSize: 14, fontWeight: 700 }}>PMS {p.name}</span>
             </div>
           )}
           <div style={{ borderTop: "1px solid #eee", paddingTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
-            <div style={{ display: "flex", alignItems: "center" }}><span style={{ fontSize: 9, color: "#888", width: 50, fontFamily: "'Space Mono',monospace" }}>White</span><span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'Space Mono',monospace" }}>{cw}</span><Badge v={cw} /></div>
-            <div style={{ display: "flex", alignItems: "center" }}><span style={{ fontSize: 9, color: "#888", width: 50, fontFamily: "'Space Mono',monospace" }}>Dark</span><span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'Space Mono',monospace" }}>{cd}</span><Badge v={cd} /></div>
+            <div style={{ display: "flex", alignItems: "center" }}><span style={{ fontSize: 14, color: "#888", width: 50, fontFamily: "'Space Mono',monospace" }}>White</span><span style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Space Mono',monospace" }}>{cw}</span><Badge v={cw} /></div>
+            <div style={{ display: "flex", alignItems: "center" }}><span style={{ fontSize: 14, color: "#888", width: 50, fontFamily: "'Space Mono',monospace" }}>Dark</span><span style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Space Mono',monospace" }}>{cd}</span><Badge v={cd} /></div>
           </div>
-          <button onClick={onClose} style={{ width: "100%", padding: 7, borderRadius: 6, border: "none", backgroundColor: "#222", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer", marginTop: 10 }}>Close</button>
+          <button onClick={onClose} style={{ width: "100%", padding: 7, borderRadius: 6, border: "none", backgroundColor: "#222", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer", marginTop: 10 }}>Close</button>
         </div>
       </div>
     </div>
@@ -677,60 +677,74 @@ export default function App() {
     return (
       <div style={{ minHeight: "100vh", background: "#f2f3f6", fontFamily: "'Outfit',sans-serif" }}>
         <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-        <div style={{ background: "linear-gradient(135deg,#111,#333)", padding: "14px 20px 10px" }}>
+        <div style={{ background: "linear-gradient(135deg,#111,#333)", padding: "18px 24px 14px" }}>
           <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 22, color: "#fff", letterSpacing: "0.06em" }}>
+            <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 33, color: "#fff", letterSpacing: "0.06em" }}>
               Compare All Options {activeBrand ? " \u00B7 " + brands[activeBrand].name : ""}
             </h1>
             <button onClick={function () { setCompare(false); }}
-              style={{ padding: "5px 14px", borderRadius: 5, border: "1px solid #555", backgroundColor: "transparent", color: "#ccc", fontSize: 10, cursor: "pointer", fontWeight: 600 }}>
+              style={{ padding: "8px 18px", borderRadius: 6, border: "1px solid #555", backgroundColor: "transparent", color: "#ccc", fontSize: 22, cursor: "pointer", fontWeight: 600 }}>
               Back to Editor
             </button>
           </div>
         </div>
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "12px 12px 40px" }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "16px 16px 50px" }}>
           {allTypes.map(function (type) {
             return (
-              <div key={type} style={{ marginBottom: 20 }}>
-                <h2 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: "0.08em", color: "#333", marginBottom: 6, textTransform: "uppercase" }}>{type}</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+              <div key={type} style={{ marginBottom: 28 }}>
+                <h2 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 23, letterSpacing: "0.08em", color: "#333", marginBottom: 8, textTransform: "uppercase" }}>{type}</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
                   {opts.map(function (opt, oi) {
                     var slots = opt[type] || [];
                     return (
                       <div key={oi}>
                         {/* L row */}
-                        <div style={{ borderRadius: 6, backgroundColor: "#fff", border: "1px solid #e8e8e8", marginBottom: 4, padding: 6 }}>
-                          <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#999", display: "block", marginBottom: 4 }}>
+                        <div style={{ borderRadius: 8, backgroundColor: "#fff", border: "1px solid #e8e8e8", marginBottom: 6, padding: 8 }}>
+                          <span style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#999", display: "block", marginBottom: 5 }}>
                             Opt {oi + 1}L
                           </span>
-                          <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 8 }}>
                             {slots.map(function (s, si) {
                               return (
                                 <div key={si}
-                                  style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: s.lightHex, border: "1.5px solid #ffffff", boxSizing: "border-box", cursor: "pointer" }}
+                                  style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: s.lightHex, border: "1.5px solid #ffffff", boxSizing: "border-box", cursor: "pointer" }}
                                   onClick={function () { setSelInfo({ hex: s.lightHex, label: s.label }); }}
                                   title={s.lightHex}
                                 />
                               );
                             })}
                           </div>
+                          {(type === "categorical" || type === "spectrum") && (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+                              <BarChart slots={slots} dark={false} stroke="#ffffff" darkBg={darkStroke} useLight={true} />
+                              <DonutChart slots={slots} dark={false} stroke="#ffffff" darkBg={darkStroke} useLight={true} />
+                              <LineChart slots={slots} dark={false} darkBg={darkStroke} useLight={true} />
+                            </div>
+                          )}
                         </div>
                         {/* D row */}
-                        <div style={{ borderRadius: 6, backgroundColor: "#1a1a1a", border: "1px solid #333", padding: 6 }}>
-                          <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#666", display: "block", marginBottom: 4 }}>
+                        <div style={{ borderRadius: 8, backgroundColor: "#1a1a1a", border: "1px solid #333", padding: 8 }}>
+                          <span style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#666", display: "block", marginBottom: 5 }}>
                             Opt {oi + 1}D
                           </span>
-                          <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 8 }}>
                             {slots.map(function (s, si) {
                               return (
                                 <div key={si}
-                                  style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: s.darkHex, border: "1.5px solid " + darkStroke, boxSizing: "border-box", cursor: "pointer" }}
+                                  style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: s.darkHex, border: "1.5px solid " + darkStroke, boxSizing: "border-box", cursor: "pointer" }}
                                   onClick={function () { setSelInfo({ hex: s.darkHex, label: s.label }); }}
                                   title={s.darkHex}
                                 />
                               );
                             })}
                           </div>
+                          {(type === "categorical" || type === "spectrum") && (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+                              <BarChart slots={slots} dark={true} stroke={darkStroke} darkBg={darkStroke} useLight={false} />
+                              <DonutChart slots={slots} dark={true} stroke={darkStroke} darkBg={darkStroke} useLight={false} />
+                              <LineChart slots={slots} dark={true} darkBg={darkStroke} useLight={false} />
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -755,14 +769,14 @@ export default function App() {
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 8 }}>
             <div>
-              <span style={{ fontFamily: "'Space Mono',monospace", fontSize: 7.5, color: "rgba(255,255,255,0.3)", letterSpacing: "0.15em", textTransform: "uppercase" }}>Data Viz Color System</span>
-              <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 26, color: "#fff", lineHeight: 1, marginTop: 2, letterSpacing: "0.05em" }}>
+              <span style={{ fontFamily: "'Space Mono',monospace", fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.15em", textTransform: "uppercase" }}>Data Viz Color System</span>
+              <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 39, color: "#fff", lineHeight: 1, marginTop: 2, letterSpacing: "0.05em" }}>
                 {activeBrand ? brands[activeBrand].name : "No Brand"}
               </h1>
             </div>
             <div style={{ display: "flex", gap: 5 }}>
-              <button onClick={function () { setShowUpload(true); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 600, fontSize: 10, cursor: "pointer" }}>+ Upload Brand</button>
-              <button onClick={function () { setCompare(true); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 600, fontSize: 10, cursor: "pointer" }}>Compare All</button>
+              <button onClick={function () { setShowUpload(true); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>+ Upload Brand</button>
+              <button onClick={function () { setCompare(true); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>Compare All</button>
             </div>
           </div>
         </div>
@@ -772,7 +786,7 @@ export default function App() {
       {brandColors.length > 0 && (
         <div style={{ maxWidth: 1200, margin: "10px auto 0", padding: "0 16px" }}>
           <div style={{ backgroundColor: "#fff", borderRadius: 10, padding: "10px 14px", border: "1px solid #eee" }}>
-            <span style={{ fontSize: 7, fontFamily: "'Space Mono',monospace", color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
               Brand Colors ({brandColors.length})
             </span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -786,18 +800,18 @@ export default function App() {
                 return (
                   <div key={i} style={{ width: 90, borderRadius: 8, overflow: "hidden", border: "1px solid #e0e0e0" }}>
                     <div style={{ height: 44, backgroundColor: c.hex, display: "flex", alignItems: "flex-end", padding: "0 6px 3px", boxSizing: "border-box" }}>
-                      <span style={{ fontSize: 7, fontWeight: 700, color: fg, fontFamily: "'Space Mono',monospace", lineHeight: 1 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: fg, fontFamily: "'Space Mono',monospace", lineHeight: 1 }}>
                         {c.name}
                       </span>
                     </div>
                     <div style={{ padding: "4px 6px 5px", backgroundColor: "#fafafa" }}>
-                      <div style={{ fontSize: 8, fontWeight: 700, color: "#222", fontFamily: "'Space Mono',monospace" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#222", fontFamily: "'Space Mono',monospace" }}>
                         {c.hex.toUpperCase()}
                       </div>
-                      <div style={{ fontSize: 6.5, color: "#999", fontFamily: "'Space Mono',monospace", marginTop: 1 }}>
+                      <div style={{ fontSize: 10, color: "#999", fontFamily: "'Space Mono',monospace", marginTop: 1 }}>
                         R{rgb.r} G{rgb.g} B{rgb.b}
                       </div>
-                      <div style={{ fontSize: 6.5, color: "#bbb", fontFamily: "'Space Mono',monospace" }}>
+                      <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'Space Mono',monospace" }}>
                         {c.pms ? c.pms : (p ? "~" + p.name : "")}
                       </div>
                     </div>
@@ -814,18 +828,18 @@ export default function App() {
         <div style={{ backgroundColor: "#fff", borderRadius: 10, padding: "10px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", border: "1px solid #eee" }}>
           {/* Dark stroke picker */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 8, fontFamily: "'Space Mono',monospace", color: "#888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Dark Stroke</span>
+            <span style={{ fontSize: 12, fontFamily: "'Space Mono',monospace", color: "#888", letterSpacing: "0.1em", textTransform: "uppercase" }}>Dark Stroke</span>
             <div style={{ position: "relative", width: 28, height: 28, borderRadius: 6, backgroundColor: darkStroke, border: "2px solid #ddd", cursor: "pointer", overflow: "hidden" }}>
               <input type="color" value={darkStroke} onChange={function (e) { setDarkStroke(e.target.value); regen(brandColors, e.target.value); }}
                 style={{ position: "absolute", inset: -4, width: "140%", height: "140%", cursor: "pointer", opacity: 0 }} />
             </div>
-            <span style={{ fontSize: 8, fontFamily: "'Space Mono',monospace", color: "#aaa" }}>{darkStroke.toUpperCase()}</span>
+            <span style={{ fontSize: 12, fontFamily: "'Space Mono',monospace", color: "#aaa" }}>{darkStroke.toUpperCase()}</span>
           </div>
 
           {/* Brand colors as quick-select for stroke */}
           {brandColors.length > 0 && (
             <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-              <span style={{ fontSize: 7, color: "#bbb", fontFamily: "'Space Mono',monospace" }}>Brand:</span>
+              <span style={{ fontSize: 11, color: "#bbb", fontFamily: "'Space Mono',monospace" }}>Brand:</span>
               {brandColors.map(function (c, i) {
                 var isActive = darkStroke === c.hex;
                 return (
@@ -841,7 +855,7 @@ export default function App() {
           {Object.keys(brands).length > 0 && (
             <div style={{ position: "relative", marginLeft: "auto" }}>
               <button onClick={function () { setBrandDD(!brandDD); }}
-                style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #ddd", backgroundColor: activeBrand ? "#fff5e6" : "#fff", color: "#333", fontSize: 9, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #ddd", backgroundColor: activeBrand ? "#fff5e6" : "#fff", color: "#333", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
                 <span>{activeBrand ? brands[activeBrand].name : "Select Brand"}</span>
                 <svg width="8" height="5" viewBox="0 0 8 5" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round"><path d="M1 1l3 3 3-3" /></svg>
               </button>
@@ -851,7 +865,7 @@ export default function App() {
                   <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, backgroundColor: "#fff", borderRadius: 8, border: "1px solid #ddd", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 40, minWidth: 200, overflow: "hidden" }}>
                   {/* Generic / no brand option */}
                   <div onClick={function () { setActiveBrand(null); setBrandDD(false); }}
-                    style={{ padding: "8px 12px", fontSize: 10, color: "#888", cursor: "pointer", borderBottom: "1px solid #f0f0f0", backgroundColor: !activeBrand ? "#f7f7f7" : "#fff" }}>
+                    style={{ padding: "8px 12px", fontSize: 15, color: "#888", cursor: "pointer", borderBottom: "1px solid #f0f0f0", backgroundColor: !activeBrand ? "#f7f7f7" : "#fff" }}>
                     No Brand (Generic)
                   </div>
                   {Object.entries(brands).map(function (entry) {
@@ -860,12 +874,12 @@ export default function App() {
                     return (
                       <div key={k} style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #f5f5f5" }}>
                         <div onClick={function () { loadBrand(k); setBrandDD(false); }}
-                          style={{ flex: 1, padding: "8px 12px", fontSize: 10, fontWeight: isActive ? 700 : 400, color: isActive ? "#333" : "#555", cursor: "pointer", backgroundColor: isActive ? "#fff5e6" : "#fff" }}>
+                          style={{ flex: 1, padding: "8px 12px", fontSize: 15, fontWeight: isActive ? 700 : 400, color: isActive ? "#333" : "#555", cursor: "pointer", backgroundColor: isActive ? "#fff5e6" : "#fff" }}>
                           {v.name}
-                          <span style={{ fontSize: 8, color: "#bbb", marginLeft: 6 }}>{v.colors.length} colors</span>
+                          <span style={{ fontSize: 12, color: "#bbb", marginLeft: 6 }}>{v.colors.length} colors</span>
                         </div>
                         <button onClick={function (e) { e.stopPropagation(); deleteBrand(k); }}
-                          style={{ padding: "4px 10px", border: "none", backgroundColor: "transparent", color: "#ccc", fontSize: 14, cursor: "pointer", lineHeight: 1 }}
+                          style={{ padding: "4px 10px", border: "none", backgroundColor: "transparent", color: "#ccc", fontSize: 21, cursor: "pointer", lineHeight: 1 }}
                           title="Delete brand">
                           ×
                         </button>
@@ -886,7 +900,7 @@ export default function App() {
           {["Opt 1", "Opt 2", "Opt 3"].map(function (lbl, i) {
             return (
               <button key={i} onClick={function () { setActiveOpt(i); }}
-                style={{ padding: "5px 12px", borderRadius: 4, border: "none", backgroundColor: activeOpt === i ? "#333" : "transparent", color: activeOpt === i ? "#fff" : "#888", fontWeight: activeOpt === i ? 700 : 400, fontSize: 10, cursor: "pointer" }}>
+                style={{ padding: "5px 12px", borderRadius: 4, border: "none", backgroundColor: activeOpt === i ? "#333" : "transparent", color: activeOpt === i ? "#fff" : "#888", fontWeight: activeOpt === i ? 700 : 400, fontSize: 15, cursor: "pointer" }}>
                 {lbl}
               </button>
             );
@@ -896,7 +910,7 @@ export default function App() {
           {tabs.map(function (t) {
             return (
               <button key={t.k} onClick={function () { setActiveTab(t.k); }}
-                style={{ padding: "5px 12px", borderRadius: 4, border: "none", backgroundColor: activeTab === t.k ? "#333" : "transparent", color: activeTab === t.k ? "#fff" : "#888", fontWeight: activeTab === t.k ? 700 : 400, fontSize: 10, cursor: "pointer" }}>
+                style={{ padding: "5px 12px", borderRadius: 4, border: "none", backgroundColor: activeTab === t.k ? "#333" : "transparent", color: activeTab === t.k ? "#fff" : "#888", fontWeight: activeTab === t.k ? 700 : 400, fontSize: 15, cursor: "pointer" }}>
                 {t.l}
               </button>
             );
@@ -928,16 +942,16 @@ export default function App() {
         {/* Downloads */}
         <div style={{ marginTop: 16, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <button onClick={function () { dlPalette(cur, activeBrand ? brands[activeBrand].name : "generic", false, brandColors, darkStroke); show("Light downloaded!"); }}
-            style={{ padding: "8px 18px", borderRadius: 7, border: "2px solid #333", backgroundColor: "#fff", color: "#333", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>
+            style={{ padding: "8px 18px", borderRadius: 7, border: "2px solid #333", backgroundColor: "#fff", color: "#333", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
             Download Light Excel
           </button>
           <button onClick={function () { dlPalette(cur, activeBrand ? brands[activeBrand].name : "generic", true, brandColors, darkStroke); show("Dark downloaded!"); }}
-            style={{ padding: "8px 18px", borderRadius: 7, border: "none", backgroundColor: "#333", color: "#fff", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>
+            style={{ padding: "8px 18px", borderRadius: 7, border: "none", backgroundColor: "#333", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
             Download Dark Excel
           </button>
-          {toast && <span style={{ fontSize: 9, fontFamily: "'Space Mono',monospace", color: "#1a7a3d", backgroundColor: "#e8f5e9", padding: "4px 8px", borderRadius: 4, fontWeight: 600 }}>{toast}</span>}
+          {toast && <span style={{ fontSize: 14, fontFamily: "'Space Mono',monospace", color: "#1a7a3d", backgroundColor: "#e8f5e9", padding: "4px 8px", borderRadius: 4, fontWeight: 600 }}>{toast}</span>}
         </div>
-        <div style={{ marginTop: 10, fontSize: 7.5, color: "#bbb", fontFamily: "'Space Mono',monospace", textAlign: "center" }}>
+        <div style={{ marginTop: 10, fontSize: 11, color: "#bbb", fontFamily: "'Space Mono',monospace", textAlign: "center" }}>
           PMS Bridge Coated values are approximations. All colors meet WCAG AA (4.5:1) — L vs white, D vs dark stroke.
         </div>
       </div>
@@ -946,19 +960,19 @@ export default function App() {
       {showUpload && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(5px)" }} onClick={function () { setShowUpload(false); }}>
           <div style={{ backgroundColor: "#fff", borderRadius: 12, maxWidth: 380, width: "100%", padding: 20, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={function (e) { e.stopPropagation(); }}>
-            <h2 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 20, marginBottom: 12 }}>Upload Brand</h2>
-            <p style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>CSV/TSV with Name + Hex columns. Darkest color auto-selected as stroke.</p>
+            <h2 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 30, marginBottom: 12 }}>Upload Brand</h2>
+            <p style={{ fontSize: 16, color: "#888", marginBottom: 12 }}>CSV/TSV with Name + Hex columns. Darkest color auto-selected as stroke.</p>
             <input type="text" placeholder="Brand name" value={uploadName} onChange={function (e) { setUploadName(e.target.value); }}
-              style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 12, marginBottom: 8, boxSizing: "border-box" }} />
+              style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 18, marginBottom: 8, boxSizing: "border-box" }} />
             <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" style={{ display: "none" }}
               onChange={function (e) { if (e.target.files && e.target.files[0]) handleUpload(e.target.files[0]); }} />
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={function () { if (uploadName.trim()) fileRef.current.click(); else show("Enter a name"); }}
-                style={{ flex: 1, padding: 9, borderRadius: 7, border: "none", backgroundColor: uploadName.trim() ? "#222" : "#ccc", color: "#fff", fontWeight: 700, fontSize: 11, cursor: uploadName.trim() ? "pointer" : "not-allowed" }}>
+                style={{ flex: 1, padding: 9, borderRadius: 7, border: "none", backgroundColor: uploadName.trim() ? "#222" : "#ccc", color: "#fff", fontWeight: 700, fontSize: 16, cursor: uploadName.trim() ? "pointer" : "not-allowed" }}>
                 Choose File
               </button>
               <button onClick={function () { setShowUpload(false); }}
-                style={{ padding: "9px 14px", borderRadius: 7, border: "1px solid #ddd", backgroundColor: "#fff", color: "#888", fontWeight: 600, fontSize: 11, cursor: "pointer" }}>
+                style={{ padding: "9px 14px", borderRadius: 7, border: "1px solid #ddd", backgroundColor: "#fff", color: "#888", fontWeight: 600, fontSize: 16, cursor: "pointer" }}>
                 Cancel
               </button>
             </div>
