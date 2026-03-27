@@ -49,18 +49,61 @@ function minHueDist(hue, otherHues) {
   return minD;
 }
 
-/* Find a hue that's at least minDist from all existing hues */
-function findDistinctHue(startHue, existingHues, minDist) {
-  /* Try the start hue first */
-  if (minHueDist(startHue, existingHues) >= minDist) return startHue;
-  /* Try shifting in increments */
-  for (var offset = 10; offset < 360; offset += 5) {
-    var h1 = (startHue + offset) % 360;
-    if (minHueDist(h1, existingHues) >= minDist) return h1;
-    var h2 = (startHue - offset + 360) % 360;
-    if (minHueDist(h2, existingHues) >= minDist) return h2;
+/* Perceptual distance between two hex colors (Euclidean in RGB) */
+function colorDist(hexA, hexB) {
+  var a = h2r(hexA), b = h2r(hexB);
+  return Math.sqrt(Math.pow(a.r-b.r,2) + Math.pow(a.g-b.g,2) + Math.pow(a.b-b.b,2));
+}
+
+/* Check if a candidate color is distinct enough from all existing colors */
+function isDistinctEnough(candidateL, candidateD, existingPairs, minRGB) {
+  for (var i = 0; i < existingPairs.length; i++) {
+    if (colorDist(candidateL, existingPairs[i].lightHex) < minRGB) return false;
+    if (colorDist(candidateD, existingPairs[i].darkHex) < minRGB) return false;
   }
-  return startHue; /* fallback */
+  return true;
+}
+
+/* Find a hue+sat combo that produces visually distinct L and D colors */
+function findDistinctColor(startHue, startSat, existingPairs, existingHues, darkBg) {
+  var MIN_HUE = 28;
+  var MIN_RGB = 75; /* perceptual distance threshold */
+  /* Try the start hue first */
+  var hue = startHue;
+  if (minHueDist(hue, existingHues) >= MIN_HUE) {
+    var pair = makePair(hue, startSat, darkBg);
+    if (isDistinctEnough(pair.lightHex, pair.darkHex, existingPairs, MIN_RGB)) {
+      return { hue: hue, sat: startSat, pair: pair };
+    }
+  }
+  /* Try shifting hue in increments, also vary saturation */
+  var satOptions = [startSat, Math.min(90, startSat + 20), Math.max(35, startSat - 20), Math.min(90, startSat + 35), Math.max(35, startSat - 35)];
+  var bestCandidate = null, bestScore = 0;
+  for (var offset = 3; offset < 360; offset += 3) {
+    for (var si = 0; si < satOptions.length; si++) {
+      var sat = satOptions[si];
+      var candidates = [(startHue + offset) % 360, (startHue - offset + 360) % 360];
+      for (var ci = 0; ci < candidates.length; ci++) {
+        var h = candidates[ci];
+        if (minHueDist(h, existingHues) < MIN_HUE) continue;
+        var p = makePair(h, sat, darkBg);
+        if (isDistinctEnough(p.lightHex, p.darkHex, existingPairs, MIN_RGB)) {
+          return { hue: h, sat: sat, pair: p };
+        }
+        /* Track best-so-far in case we can't meet full threshold */
+        var score = 0;
+        for (var k = 0; k < existingPairs.length; k++) {
+          score += colorDist(p.lightHex, existingPairs[k].lightHex);
+          score += colorDist(p.darkHex, existingPairs[k].darkHex);
+        }
+        if (score > bestScore) { bestScore = score; bestCandidate = { hue: h, sat: sat, pair: p }; }
+      }
+    }
+  }
+  /* Fallback: use best scoring candidate we found */
+  if (bestCandidate) return bestCandidate;
+  var fp = makePair(startHue, startSat, darkBg);
+  return { hue: startHue, sat: startSat, pair: fp };
 }
 
 /* ═══ BASE HUE SETS — 3 distinct options ═══ */
@@ -81,7 +124,7 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
   var seed = reworkSeed || 0;
   var usedBrandIdxs = {}; /* track which brand colors are already assigned */
   var assignedHues = []; /* track assigned hues for distance check */
-  var MIN_HUE_DIST = 25;
+  var assignedPairs = []; /* track actual rendered colors for perceptual check */
 
   var cat = baseHues.map(function(base, i) {
     var hue = (base.hue + seed * 17) % 360; /* rework shifts all hues */
@@ -99,11 +142,15 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
       }
     }
 
-    /* Ensure this hue is distinct from all previously assigned */
-    hue = findDistinctHue(hue, assignedHues, MIN_HUE_DIST);
-    assignedHues.push(hue);
+    /* Find a hue+sat that's visually distinct in both L and D */
+    var result = findDistinctColor(hue, sat, assignedPairs, assignedHues, darkBg);
+    hue = result.hue;
+    sat = result.sat;
+    var pair = result.pair;
 
-    var pair = makePair(hue, sat, darkBg);
+    assignedHues.push(hue);
+    assignedPairs.push(pair);
+
     return {id:i, hue:hue, sat:pair.sat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:swapped?"~"+swapped:base.label, swapped:swapped};
   });
 
@@ -281,18 +328,18 @@ function CompareView(props) {
         <BrandStrip brandColors={brandColors} />
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
           {opts.map(function(opt,oi){
-            var catSlots=opt[activeTab]||opt.categorical,semSlots=opt.semantic,deemSlots=opt.deemphasis,lStk="#ffffff",dStk=darkStroke;
+            var catSlots=opt.categorical,specSlots=opt.spectrum,semSlots=opt.semantic,deemSlots=opt.deemphasis,lStk="#ffffff",dStk=darkStroke;
             return (<div key={oi}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:"0.08em",color:"#333",marginBottom:8}}>Option {oi+1}</div>
               <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#999",marginBottom:4}}>{oi+1}L · White Stroke</div>
-              <CC dk={false}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={true} /></div></CC>
-              <CC dk={true}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={true} /></div></CC>
+              <CC dk={false}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#ccc",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={true} /></div></CC>
+              <CC dk={true}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"rgba(255,255,255,0.3)",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={true} /></div></CC>
               <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={true} bg="#ffffff" stk="#ffffff" /></CC>
               <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={true} bg={dStk} stk="#ffffff" /></CC>
               <div style={{height:3,backgroundColor:"#000",borderRadius:2,margin:"14px 0"}} />
               <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#999",marginBottom:4}}>{oi+1}D · Dark Stroke</div>
-              <CC dk={false}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={false} /></div></CC>
-              <CC dk={true}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={false} /></div></CC>
+              <CC dk={false}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#ccc",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={false} /></div></CC>
+              <CC dk={true}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"rgba(255,255,255,0.3)",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={false} /></div></CC>
               <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={false} bg="#ffffff" stk={dStk} /></CC>
               <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={false} bg={dStk} stk={dStk} /></CC>
             </div>);
@@ -364,19 +411,22 @@ export default function App() {
       var idx=slots.findIndex(function(s){return s.id===sid;});
       if(idx<0) return prev;
       var s=slots[idx];
-      var otherHues=[];
-      for(var j=0;j<slots.length;j++){if(j!==idx)otherHues.push(slots[j].hue);}
-      /* Always shift by at least 30°, try for distinct */
+      var otherHues=[]; var otherPairs=[];
+      for(var j=0;j<slots.length;j++){if(j!==idx){otherHues.push(slots[j].hue);otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}}
+      /* Try candidates for perceptual + hue distinction */
       var best=null, bestDist=0;
-      for(var attempt=0;attempt<30;attempt++){
-        var candidate=(s.hue+30+Math.floor(Math.random()*90))%360;
-        var d=minHueDist(candidate,otherHues);
-        if(d>=25){best=candidate;break;}
-        if(d>bestDist){bestDist=d;best=candidate;}
+      for(var attempt=0;attempt<40;attempt++){
+        var candidate=(s.hue+30+Math.floor(Math.random()*120))%360;
+        if(minHueDist(candidate,otherHues)<28) continue;
+        var satOpt=Math.min(90,Math.max(35,s.sat+Math.floor(Math.random()*20)-10));
+        var p=makePair(candidate,satOpt,darkStroke);
+        if(isDistinctEnough(p.lightHex,p.darkHex,otherPairs,75)){best={hue:candidate,sat:satOpt,pair:p};break;}
+        var d=0;for(var k=0;k<otherPairs.length;k++){d+=colorDist(p.lightHex,otherPairs[k].lightHex)+colorDist(p.darkHex,otherPairs[k].darkHex);}
+        if(d>bestDist){bestDist=d;best={hue:candidate,sat:satOpt,pair:p};}
       }
-      s.hue=best!==null?best:(s.hue+45)%360;
-      var pair=makePair(s.hue,s.sat,darkStroke);
-      s.lightHex=pair.lightHex; s.darkHex=pair.darkHex;
+      if(!best){best={hue:(s.hue+60)%360,sat:s.sat,pair:makePair((s.hue+60)%360,s.sat,darkStroke)};}
+      s.hue=best.hue; s.sat=best.sat;
+      s.lightHex=best.pair.lightHex; s.darkHex=best.pair.darkHex;
       s.label="H"+Math.round(s.hue)+"\u00B0"; s.swapped=null;
       next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
       return next;
