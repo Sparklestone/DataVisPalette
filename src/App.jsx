@@ -160,12 +160,13 @@ function Swatch(props) {
   var hex=props.hex,stroke=props.stroke,isDark=props.isDark,darkBg=props.darkBg;
   var onHue=props.onHue,onLight=props.onLight,onSelect=props.onSelect,label=props.label;
   var slotId=props.slotId,slotType=props.slotType;
-  var bg=isDark?darkBg:"#ffffff"; var ratio=CR(hex,bg); var pass=ratio>=4.5; var hov=useState(false);
+  var bg=isDark?darkBg:"#ffffff"; var ratio=CR(hex,bg); var pass=ratio>=4.5;
+  var btnStyle={position:"absolute",width:22,height:22,borderRadius:11,backgroundColor:"rgba(0,0,0,0.45)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2};
   return (
-    <div style={{position:"relative",width:96,borderRadius:8,overflow:"hidden",backgroundColor:"#fff",border:"1px solid #eee",flexShrink:0,transform:hov[0]?"scale(1.04)":"scale(1)",transition:"transform 0.15s"}} onMouseEnter={function(){hov[1](true);}} onMouseLeave={function(){hov[1](false);}}>
+    <div style={{position:"relative",width:96,borderRadius:8,overflow:"hidden",backgroundColor:"#fff",border:"1px solid #eee",flexShrink:0}}>
       <div style={{height:52,backgroundColor:hex,position:"relative",cursor:"pointer",border:"2px solid "+stroke,borderRadius:"6px 6px 0 0",boxSizing:"border-box"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:label,slotId:slotId,slotType:slotType,onHue:onHue,onLight:onLight});}}>
-        {onHue&&(<button onClick={function(e){e.stopPropagation();onHue();}} style={{position:"absolute",top:3,left:3,width:20,height:20,borderRadius:10,backgroundColor:"rgba(0,0,0,0.5)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:hov[0]?1:0,transition:"opacity 0.15s",padding:0}} title="Shift hue"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
-        {onLight&&(<button onClick={function(e){e.stopPropagation();onLight();}} style={{position:"absolute",top:3,right:3,width:20,height:20,borderRadius:10,backgroundColor:"rgba(0,0,0,0.5)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:hov[0]?1:0,transition:"opacity 0.15s",padding:0}} title="Cycle tone"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+        {onHue&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onHue();}} style={Object.assign({},btnStyle,{top:3,left:3})} title="Shift hue"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
+        {onLight&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onLight();}} style={Object.assign({},btnStyle,{top:3,right:3})} title="Cycle tone"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
       </div>
       <div style={{padding:"4px 6px 5px",display:"flex",alignItems:"center",gap:4}}>
         <div style={{width:8,height:8,borderRadius:4,backgroundColor:pass?"#1a7a3d":"#c42b2b",flexShrink:0}} />
@@ -201,7 +202,7 @@ function OptionPanel(props) {
       <SL text="Semantic" sub="success / warning / error" />
       {renderSwatches(semSlots,"semantic")}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:6}}>
-        {[false,true].map(function(dk){var bg=dk?darkBg:"#ffffff";return (<div key={dk?"sd":"sl"} style={{borderRadius:6,padding:8,backgroundColor:bg,border:"1px solid "+(dk?"rgba(255,255,255,0.08)":"#eee")}}>{semSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;var ratio=CR(hex,bg).toFixed(1);var nn=parseFloat(ratio);return (<div key={i} style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}><div style={{width:10,height:10,borderRadius:5,backgroundColor:hex,flexShrink:0}} /><span style={{color:hex,fontWeight:700,fontSize:12}}>{s.label}</span><span style={{fontSize:10,fontWeight:700,color:"#fff",backgroundColor:nn>=4.5?"#1a7a3d":"#c42b2b",padding:"1px 3px",borderRadius:2}}>{ratio}:1</span></div>);})}</div>);})}
+        {[false,true].map(function(dk){var bg=dk?darkBg:"#ffffff";var stk=isDark?darkBg:"#ffffff";return (<div key={dk?"sd":"sl"} style={{borderRadius:6,padding:8,backgroundColor:bg,border:"1px solid "+(dk?"rgba(255,255,255,0.08)":"#eee")}}>{semSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;var ratio=CR(hex,bg).toFixed(1);var nn=parseFloat(ratio);return (<div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><div style={{width:80,height:24,borderRadius:4,backgroundColor:hex,border:"2px solid "+stk,boxSizing:"border-box",flexShrink:0}} /><span style={{color:hex,fontWeight:700,fontSize:12}}>{s.label}</span><span style={{fontSize:10,fontWeight:700,color:"#fff",backgroundColor:nn>=4.5?"#1a7a3d":"#c42b2b",padding:"1px 3px",borderRadius:2}}>{ratio}:1</span></div>);})}</div>);})}
       </div>
       <SL text="Deemphasis" sub="cool-toned grays" />
       {renderSwatches(deemSlots,"deemphasis")}
@@ -212,32 +213,39 @@ function OptionPanel(props) {
 /* ═══ COLOR DETAIL MODAL ═══ */
 function ColorDetail(props) {
   var info=props.info,onClose=props.onClose,onSetHSL=props.onSetHSL;
-  var editH=useState(0),editS=useState(0),editL=useState(0),inited=useRef(false);
   if(!info) return null;
   var rgb=h2r(info.hex); var hsl=r2hsl(rgb.r,rgb.g,rgb.b); var cmyk=r2cmyk(rgb.r,rgb.g,rgb.b);
   var p=findPMS(info.hex); var cw=CR(info.hex,"#ffffff").toFixed(2); var cd=CR(info.hex,"#121212").toFixed(2);
   var ll=getLum(rgb.r,rgb.g,rgb.b); var fg=ll>0.35?"#111":"#fff";
-  if(!inited.current){editH[1](Math.round(hsl.h));editS[1](Math.round(hsl.s));editL[1](Math.round(hsl.l));inited.current=true;}
   function Badge(bp){var nn=parseFloat(bp.v);var lv=nn>=7?"AAA":nn>=4.5?"AA":"Fail";var bg=nn>=4.5?"#1a7a3d":"#c42b2b";return (<span style={{fontSize:12,fontWeight:700,color:"#fff",backgroundColor:bg,padding:"1px 5px",borderRadius:3,marginLeft:4}}>{lv} {bp.v}</span>);}
-  function applyHSL(){if(onSetHSL&&info.slotType!=null&&info.slotId!=null){onSetHSL(info.slotType,info.slotId,editH[0],editS[0],editL[0]);onClose();}}
+  function handleColorPick(e){
+    if(onSetHSL&&info.slotType!=null&&info.slotId!=null){
+      var newHsl=hex2hsl(e.target.value);
+      onSetHSL(info.slotType,info.slotId,Math.round(newHsl.h),Math.round(newHsl.s),Math.round(newHsl.l));
+      onClose();
+    }
+  }
+  var canEdit=onSetHSL&&info.slotType!=null&&info.slotId!=null;
   return (
     <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={onClose}>
       <div style={{backgroundColor:"#fff",borderRadius:14,maxWidth:340,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
         <div style={{height:110,backgroundColor:info.hex,color:fg,position:"relative",display:"flex",alignItems:"flex-end",padding:14}}>
-          {info.onHue&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:28,height:28,borderRadius:14,backgroundColor:"rgba(0,0,0,0.5)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}} title="Shift hue"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
-          {info.onLight&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:28,height:28,borderRadius:14,backgroundColor:"rgba(0,0,0,0.5)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}} title="Cycle tone"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+          {info.onHue&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:28,height:28,borderRadius:14,backgroundColor:"rgba(0,0,0,0.45)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Shift hue"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
+          {info.onLight&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:28,height:28,borderRadius:14,backgroundColor:"rgba(0,0,0,0.45)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle tone"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+          {canEdit&&(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:36,height:36,borderRadius:18,backgroundColor:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",border:"2px solid rgba(255,255,255,0.5)"}}>
+            <input type="color" value={info.hex} onChange={handleColorPick} style={{position:"absolute",inset:-6,width:"150%",height:"150%",cursor:"pointer",opacity:0}} />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"><path d="M12 1l3 3-9 9H3v-3z"/><path d="M10 3l3 3"/></svg>
+          </div>)}
           <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,letterSpacing:"0.06em"}}>{info.label||"Color"}</div>
         </div>
         <div style={{padding:14}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontFamily:"'Space Mono',monospace",fontSize:14,marginBottom:10}}>
             <div><span style={{color:"#aaa"}}>HEX</span><br /><b>{info.hex.toUpperCase()}</b></div>
             <div><span style={{color:"#aaa"}}>RGB</span><br /><b>{rgb.r},{rgb.g},{rgb.b}</b></div>
-            <div><span style={{color:"#aaa"}}>HSL</span><br /><div style={{display:"flex",gap:3,marginTop:2}}><input type="number" value={editH[0]} onChange={function(e){editH[1](parseInt(e.target.value)||0);}} style={{width:44,padding:"2px 4px",border:"1px solid #ddd",borderRadius:4,fontSize:12,fontFamily:"'Space Mono',monospace",textAlign:"center"}} min="0" max="360" /><input type="number" value={editS[0]} onChange={function(e){editS[1](parseInt(e.target.value)||0);}} style={{width:38,padding:"2px 4px",border:"1px solid #ddd",borderRadius:4,fontSize:12,fontFamily:"'Space Mono',monospace",textAlign:"center"}} min="0" max="100" /><input type="number" value={editL[0]} onChange={function(e){editL[1](parseInt(e.target.value)||0);}} style={{width:38,padding:"2px 4px",border:"1px solid #ddd",borderRadius:4,fontSize:12,fontFamily:"'Space Mono',monospace",textAlign:"center"}} min="0" max="100" /></div></div>
+            <div><span style={{color:"#aaa"}}>HSL</span><br /><b>{Math.round(hsl.h)}&deg; {Math.round(hsl.s)}% {Math.round(hsl.l)}%</b></div>
             <div><span style={{color:"#aaa"}}>CMYK</span><br /><b>{cmyk.c}/{cmyk.m}/{cmyk.y}/{cmyk.k}</b></div>
           </div>
-          {(editH[0]!==Math.round(hsl.h)||editS[0]!==Math.round(hsl.s)||editL[0]!==Math.round(hsl.l))&&info.slotType!=null&&(
-            <button onClick={applyHSL} style={{width:"100%",padding:7,borderRadius:6,border:"2px solid #1a7a3d",backgroundColor:"#e8f5e9",color:"#1a7a3d",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:8}}>Apply HSL Changes</button>
-          )}
+          {p&&(<div style={{borderTop:"1px solid #eee",paddingTop:6,marginBottom:6,display:"flex",alignItems:"center",gap:5}}><div style={{width:16,height:16,borderRadius:3,backgroundColor:p.h,border:"1px solid #ddd"}} /><span style={{fontFamily:"'Space Mono',monospace",fontSize:13,fontWeight:700}}>PMS {p.n}</span></div>)}
           <div style={{borderTop:"1px solid #eee",paddingTop:6,display:"flex",flexDirection:"column",gap:3}}>
             <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#888",width:50,fontFamily:"'Space Mono',monospace"}}>White</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cw}</span><Badge v={cw} /></div>
             <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#888",width:50,fontFamily:"'Space Mono',monospace"}}>Dark</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cd}</span><Badge v={cd} /></div>
@@ -254,15 +262,15 @@ function BrandStrip(props) {
   var bc=props.brandColors; if(!bc||!bc.length) return null;
   return (<div style={{backgroundColor:"#fff",borderRadius:10,padding:"10px 14px",border:"1px solid #eee",marginBottom:10}}>
     <span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#aaa",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>Brand Colors ({bc.length})</span>
-    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{bc.map(function(c,i){var rgb=h2r(c.hex);var l=getLum(rgb.r,rgb.g,rgb.b);var fg=l>0.35?"#111":"#fff";return (<div key={i} style={{width:90,borderRadius:8,overflow:"hidden",border:"1px solid #e0e0e0"}}><div style={{height:44,backgroundColor:c.hex,display:"flex",alignItems:"flex-end",padding:"0 6px 3px",boxSizing:"border-box"}}><span style={{fontSize:11,fontWeight:700,color:fg,fontFamily:"'Space Mono',monospace",lineHeight:1}}>{c.name}</span></div><div style={{padding:"4px 6px 5px",backgroundColor:"#fafafa"}}><div style={{fontSize:12,fontWeight:700,color:"#222",fontFamily:"'Space Mono',monospace"}}>{c.hex.toUpperCase()}</div></div></div>);})}</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{bc.map(function(c,i){var rgb=h2r(c.hex);var l=getLum(rgb.r,rgb.g,rgb.b);var fg=l>0.35?"#111":"#fff";return (<div key={i} style={{width:90,borderRadius:8,overflow:"hidden",border:"1px solid #e0e0e0"}}><div style={{height:44,backgroundColor:c.hex,display:"flex",alignItems:"flex-start",padding:"4px 6px 0",boxSizing:"border-box"}}><span style={{fontSize:11,fontWeight:700,color:fg,fontFamily:"'Space Mono',monospace",lineHeight:1.2}}>{c.name}</span></div><div style={{padding:"4px 6px 5px",backgroundColor:"#fafafa"}}><div style={{fontSize:12,fontWeight:700,color:"#222",fontFamily:"'Space Mono',monospace"}}>{c.hex.toUpperCase()}</div></div></div>);})}</div>
   </div>);
 }
 
 /* ═══ COMPARE (compact) ═══ */
 function CompareView(props) {
-  var opts=props.opts,darkStroke=props.darkStroke,activeTab=props.activeTab,brandColors=props.brandColors,brands=props.brands,activeBrand=props.activeBrand,setSelInfo=props.setSelInfo,setCompare=props.setCompare,setSlotHSL=props.setSlotHSL,selInfo=props.selInfo;
-  function CS(cp){return (<div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+cp.stk,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){setSelInfo({hex:hex,label:s.label});}} title={hex} />);})}</div>);}
-  function CSL(cp){return (<div style={{marginTop:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var ratio=CR(hex,cp.bg).toFixed(1);var nn=parseFloat(ratio);return (<div key={i} style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}><div style={{width:12,height:12,borderRadius:6,backgroundColor:hex,flexShrink:0}} /><span style={{color:hex,fontWeight:700,fontSize:12}}>{s.label}</span><span style={{fontSize:10,fontWeight:700,color:"#fff",backgroundColor:nn>=4.5?"#1a7a3d":"#c42b2b",padding:"1px 4px",borderRadius:3}}>{ratio}:1</span></div>);})}</div>);}
+  var opts=props.opts,darkStroke=props.darkStroke,activeTab=props.activeTab,brandColors=props.brandColors,brands=props.brands,activeBrand=props.activeBrand,setSelInfo=props.setSelInfo,setCompare=props.setCompare,setSlotHSL=props.setSlotHSL,selInfo=props.selInfo,hueShift=props.hueShift,lightShift=props.lightShift;
+  function CS(cp){var oi=cp.oi,type=cp.type||"categorical";return (<div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var hCb=hueShift?function(){hueShift(oi,type,s.id);}:null;var lCb=lightShift?function(){lightShift(oi,type,s.id);}:null;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+cp.stk,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){setSelInfo({hex:hex,label:s.label,slotId:s.id,slotType:type,onHue:hCb,onLight:lCb});}} title={hex} />);})}</div>);}
+  function CSL(cp){var stk=cp.stk||"#ffffff";return (<div style={{marginTop:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var ratio=CR(hex,cp.bg).toFixed(1);var nn=parseFloat(ratio);return (<div key={i} style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}><div style={{width:60,height:18,borderRadius:3,backgroundColor:hex,border:"2px solid "+stk,boxSizing:"border-box",flexShrink:0}} /><span style={{color:hex,fontWeight:700,fontSize:11}}>{s.label}</span><span style={{fontSize:9,fontWeight:700,color:"#fff",backgroundColor:nn>=4.5?"#1a7a3d":"#c42b2b",padding:"1px 3px",borderRadius:2}}>{ratio}:1</span></div>);})}</div>);}
   function CC(cp){var bg=cp.dk?darkStroke:"#ffffff";return (<div style={{borderRadius:8,backgroundColor:bg,border:"1px solid "+(cp.dk?"rgba(255,255,255,0.08)":"#e8e8e8"),padding:10,marginBottom:6}}>{cp.children}</div>);}
   var sub={fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace",marginBottom:4};
   return (
@@ -277,16 +285,16 @@ function CompareView(props) {
             return (<div key={oi}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:"0.08em",color:"#333",marginBottom:8}}>Option {oi+1}</div>
               <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#999",marginBottom:4}}>{oi+1}L · White Stroke</div>
-              <CC dk={false}><CS slots={catSlots} useL={true} stk={lStk} /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={true} /></div></CC>
-              <CC dk={true}><CS slots={catSlots} useL={true} stk={lStk} /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={true} /></div></CC>
-              <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} /><CSL slots={semSlots} useL={true} bg="#ffffff" /></CC>
-              <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} /><CSL slots={semSlots} useL={true} bg={dStk} /></CC>
+              <CC dk={false}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={true} /></div></CC>
+              <CC dk={true}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={true} /></div></CC>
+              <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={true} bg="#ffffff" stk="#ffffff" /></CC>
+              <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={true} bg={dStk} stk="#ffffff" /></CC>
               <div style={{height:3,backgroundColor:"#000",borderRadius:2,margin:"14px 0"}} />
               <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#999",marginBottom:4}}>{oi+1}D · Dark Stroke</div>
-              <CC dk={false}><CS slots={catSlots} useL={false} stk={dStk} /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={false} /></div></CC>
-              <CC dk={true}><CS slots={catSlots} useL={false} stk={dStk} /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={false} /></div></CC>
-              <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} /><CSL slots={semSlots} useL={false} bg="#ffffff" /></CC>
-              <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} /><CSL slots={semSlots} useL={false} bg={dStk} /></CC>
+              <CC dk={false}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={false} /></div></CC>
+              <CC dk={true}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={false} /></div></CC>
+              <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={false} bg="#ffffff" stk={dStk} /></CC>
+              <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={false} bg={dStk} stk={dStk} /></CC>
             </div>);
           })}
         </div>
@@ -356,20 +364,20 @@ export default function App() {
       var idx=slots.findIndex(function(s){return s.id===sid;});
       if(idx<0) return prev;
       var s=slots[idx];
-      /* Collect other hues in this palette type */
       var otherHues=[];
       for(var j=0;j<slots.length;j++){if(j!==idx)otherHues.push(slots[j].hue);}
-      /* Try random shifts until we find one distinct enough */
-      var newHue=s.hue;
-      for(var attempt=0;attempt<20;attempt++){
-        var candidate=(s.hue+30+Math.floor(Math.random()*60))%360;
-        if(minHueDist(candidate,otherHues)>=25){newHue=candidate;break;}
+      /* Always shift by at least 30°, try for distinct */
+      var best=null, bestDist=0;
+      for(var attempt=0;attempt<30;attempt++){
+        var candidate=(s.hue+30+Math.floor(Math.random()*90))%360;
+        var d=minHueDist(candidate,otherHues);
+        if(d>=25){best=candidate;break;}
+        if(d>bestDist){bestDist=d;best=candidate;}
       }
-      s.hue=newHue;
+      s.hue=best!==null?best:(s.hue+45)%360;
       var pair=makePair(s.hue,s.sat,darkStroke);
       s.lightHex=pair.lightHex; s.darkHex=pair.darkHex;
       s.label="H"+Math.round(s.hue)+"\u00B0"; s.swapped=null;
-      /* Only rebuild spectrum, don't touch other slots */
       next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
       return next;
     });
@@ -412,7 +420,7 @@ export default function App() {
   if(!loaded||!cur) return <div style={{padding:40,textAlign:"center",color:"#888"}}>Loading...</div>;
   var tabs=[{k:"categorical",l:"Categorical"},{k:"spectrum",l:"Spectrum"}];
 
-  if(compare) return <CompareView opts={opts} darkStroke={darkStroke} activeTab={activeTab} brandColors={brandColors} brands={brands} activeBrand={activeBrand} setSelInfo={setSelInfo} setCompare={setCompare} setSlotHSL={setSlotHSL} selInfo={selInfo} />;
+  if(compare) return <CompareView opts={opts} darkStroke={darkStroke} activeTab={activeTab} brandColors={brandColors} brands={brands} activeBrand={activeBrand} setSelInfo={setSelInfo} setCompare={setCompare} setSlotHSL={setSlotHSL} selInfo={selInfo} hueShift={hueShift} lightShift={lightShift} />;
 
   return (
     <div style={{minHeight:"100vh",background:"#f2f3f6",fontFamily:"'Outfit',sans-serif"}}>
