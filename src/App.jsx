@@ -313,19 +313,19 @@ function Swatch(props) {
   var hex = props.hex; var stroke = props.stroke; var isDark = props.isDark; var darkBg = props.darkBg;
   var onHue = props.onHue; var onLight = props.onLight; var onSelect = props.onSelect; var label = props.label;
   var rgb = h2r(hex); var l = getLum(rgb.r, rgb.g, rgb.b);
-  var p = findPMS(hex); var cmyk = r2cmyk(rgb.r, rgb.g, rgb.b);
+  var cmyk = r2cmyk(rgb.r, rgb.g, rgb.b);
   var bg = isDark ? darkBg : "#ffffff";
   var ratio = CR(hex, bg).toFixed(1);
   var n = parseFloat(ratio);
   var rCol = n >= 4.5 ? "#1a7a3d" : "#c42b2b";
-  var cardBg = isDark ? "rgba(255,255,255,0.05)" : "#fff";
-  var txtCol = isDark ? "#ccc" : "#111";
-  var subCol = isDark ? "#666" : "#999";
+  var cardBg = "#fff";
+  var txtCol = "#111";
+  var subCol = "#999";
   var hov = useState(false);
 
   return (
     <div
-      style={{ position: "relative", width: 96, borderRadius: 8, overflow: "hidden", backgroundColor: cardBg, border: "1px solid " + (isDark ? "rgba(255,255,255,0.08)" : "#eee"), flexShrink: 0, transform: hov[0] ? "scale(1.04)" : "scale(1)", transition: "transform 0.15s" }}
+      style={{ position: "relative", width: 96, borderRadius: 8, overflow: "hidden", backgroundColor: cardBg, border: "1px solid #eee", flexShrink: 0, transform: hov[0] ? "scale(1.04)" : "scale(1)", transition: "transform 0.15s" }}
       onMouseEnter={function () { hov[1](true); }}
       onMouseLeave={function () { hov[1](false); }}
     >
@@ -348,9 +348,8 @@ function Swatch(props) {
       </div>
       <div style={{ padding: "4px 6px 5px" }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: txtCol, fontFamily: "'Space Mono',monospace" }}>{hex.toUpperCase()}</div>
-        <div style={{ fontSize: 11, color: subCol, fontFamily: "'Space Mono',monospace" }}>PMS {p ? p.name : "-"}</div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 10, color: subCol, fontFamily: "'Space Mono',monospace" }}>{p ? p.c + "/" + p.m + "/" + p.y + "/" + p.k : cmyk.c + "/" + cmyk.m + "/" + cmyk.y + "/" + cmyk.k}</span>
+          <span style={{ fontSize: 10, color: subCol, fontFamily: "'Space Mono',monospace" }}>{cmyk.c + "/" + cmyk.m + "/" + cmyk.y + "/" + cmyk.k}</span>
           <span style={{ fontSize: 10, fontWeight: 700, color: rCol, fontFamily: "'Space Mono',monospace" }}>{ratio}:1</span>
         </div>
       </div>
@@ -370,10 +369,10 @@ function OptionPanel(props) {
   function SectionLabel(lp) {
     return (
       <div style={{ marginBottom: 4, marginTop: 14, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: "0.08em", color: isDark ? "#999" : "#555" }}>
+        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 18, letterSpacing: "0.08em", color: "#555" }}>
           {lp.text}
         </span>
-        {lp.sub && <span style={{ fontSize: 12, color: isDark ? "#555" : "#bbb", fontFamily: "'Space Mono',monospace" }}>{lp.sub}</span>}
+        {lp.sub && <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'Space Mono',monospace" }}>{lp.sub}</span>}
       </div>
     );
   }
@@ -382,11 +381,11 @@ function OptionPanel(props) {
     <div style={{ flex: 1, minWidth: 0 }}>
       {/* Header */}
       <div style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: stroke, border: "1px solid " + (isDark ? "rgba(255,255,255,0.15)" : "#ddd") }} />
-        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 21, letterSpacing: "0.08em", color: isDark ? "#ccc" : "#222" }}>
+        <div style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: stroke, border: "1px solid #ddd" }} />
+        <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 21, letterSpacing: "0.08em", color: "#222" }}>
           {mode} · {stroke === "#ffffff" ? "White" : "Dark"} Stroke
         </span>
-        <span style={{ fontSize: 12, color: isDark ? "#555" : "#bbb", fontFamily: "'Space Mono',monospace" }}>
+        <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'Space Mono',monospace" }}>
           WCAG AA 4.5:1 vs {isDark ? darkBg : "#FFF"}
         </span>
       </div>
@@ -408,7 +407,7 @@ function OptionPanel(props) {
       {/* Spectrum ramp (if on spectrum tab) */}
       {activeTab === "spectrum" && (
         <div style={{ borderRadius: 6, padding: 8, backgroundColor: isDark ? darkBg : "#fff", border: "1px solid " + (isDark ? "rgba(255,255,255,0.08)" : "#eee"), marginBottom: 8 }}>
-          <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: isDark ? "rgba(255,255,255,0.25)" : "#ccc", display: "block", marginBottom: 3 }}>Rainbow ramp</span>
+          <span style={{ fontSize: 11, fontFamily: "'Space Mono',monospace", color: "#ccc", display: "block", marginBottom: 3 }}>Rainbow ramp</span>
           <div style={{ display: "flex", height: 24, borderRadius: 4, overflow: "hidden" }}>
             {mainSlots.map(function (s, i) {
               return <div key={i} style={{ flex: 1, backgroundColor: isDark ? s.darkHex : s.lightHex }} />;
@@ -673,86 +672,158 @@ export default function App() {
 
   /* ── COMPARE VIEW ── */
   if (compare) {
-    var allTypes = ["categorical", "spectrum", "semantic", "deemphasis"];
+    function CSwatches(cp) {
+      return (
+        <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 6 }}>
+          {cp.slots.map(function (s, i) {
+            var hex = cp.useL ? s.lightHex : s.darkHex;
+            return (
+              <div key={i} style={{ width: 26, height: 26, borderRadius: 4, backgroundColor: hex, border: "1.5px solid " + cp.stk, boxSizing: "border-box", cursor: "pointer" }}
+                onClick={function () { setSelInfo({ hex: hex, label: s.label }); }} title={hex} />
+            );
+          })}
+        </div>
+      );
+    }
+    function CSemLabels(cp) {
+      return (
+        <div style={{ marginTop: 6 }}>
+          {cp.slots.map(function (s, i) {
+            var hex = cp.useL ? s.lightHex : s.darkHex;
+            var ratio = CR(hex, cp.bg).toFixed(1);
+            var nn = parseFloat(ratio);
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: hex, flexShrink: 0 }} />
+                <span style={{ color: hex, fontWeight: 700, fontSize: 12 }}>{s.label}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", backgroundColor: nn >= 4.5 ? "#1a7a3d" : "#c42b2b", padding: "1px 4px", borderRadius: 3 }}>{ratio}:1</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    function CCard(cp) {
+      var bg = cp.dk ? darkStroke : "#ffffff";
+      var bdr = cp.dk ? "rgba(255,255,255,0.08)" : "#e8e8e8";
+      return (
+        <div style={{ borderRadius: 8, backgroundColor: bg, border: "1px solid " + bdr, padding: 10, marginBottom: 6 }}>
+          {cp.children}
+        </div>
+      );
+    }
+
     return (
       <div style={{ minHeight: "100vh", background: "#f2f3f6", fontFamily: "'Outfit',sans-serif" }}>
         <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
         <div style={{ background: "linear-gradient(135deg,#111,#333)", padding: "18px 24px 14px" }}>
-          <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ maxWidth: 1500, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 33, color: "#fff", letterSpacing: "0.06em" }}>
-              Compare All Options {activeBrand ? " \u00B7 " + brands[activeBrand].name : ""}
+              Compare All {activeBrand ? " \u00B7 " + brands[activeBrand].name : ""}
             </h1>
             <button onClick={function () { setCompare(false); }}
-              style={{ padding: "8px 18px", borderRadius: 6, border: "1px solid #555", backgroundColor: "transparent", color: "#ccc", fontSize: 22, cursor: "pointer", fontWeight: 600 }}>
+              style={{ padding: "8px 18px", borderRadius: 6, border: "1px solid #555", backgroundColor: "transparent", color: "#ccc", fontSize: 15, cursor: "pointer", fontWeight: 600 }}>
               Back to Editor
             </button>
           </div>
         </div>
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "16px 16px 50px" }}>
-          {allTypes.map(function (type) {
-            return (
-              <div key={type} style={{ marginBottom: 28 }}>
-                <h2 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 23, letterSpacing: "0.08em", color: "#333", marginBottom: 8, textTransform: "uppercase" }}>{type}</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                  {opts.map(function (opt, oi) {
-                    var slots = opt[type] || [];
-                    return (
-                      <div key={oi}>
-                        {/* L row */}
-                        <div style={{ borderRadius: 8, backgroundColor: "#fff", border: "1px solid #e8e8e8", marginBottom: 6, padding: 8 }}>
-                          <span style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#999", display: "block", marginBottom: 5 }}>
-                            Opt {oi + 1}L
-                          </span>
-                          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 8 }}>
-                            {slots.map(function (s, si) {
-                              return (
-                                <div key={si}
-                                  style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: s.lightHex, border: "1.5px solid #ffffff", boxSizing: "border-box", cursor: "pointer" }}
-                                  onClick={function () { setSelInfo({ hex: s.lightHex, label: s.label }); }}
-                                  title={s.lightHex}
-                                />
-                              );
-                            })}
-                          </div>
-                          {(type === "categorical" || type === "spectrum") && (
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
-                              <BarChart slots={slots} dark={false} stroke="#ffffff" darkBg={darkStroke} useLight={true} />
-                              <DonutChart slots={slots} dark={false} stroke="#ffffff" darkBg={darkStroke} useLight={true} />
-                              <LineChart slots={slots} dark={false} darkBg={darkStroke} useLight={true} />
-                            </div>
-                          )}
-                        </div>
-                        {/* D row */}
-                        <div style={{ borderRadius: 8, backgroundColor: "#1a1a1a", border: "1px solid #333", padding: 8 }}>
-                          <span style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#666", display: "block", marginBottom: 5 }}>
-                            Opt {oi + 1}D
-                          </span>
-                          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 8 }}>
-                            {slots.map(function (s, si) {
-                              return (
-                                <div key={si}
-                                  style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: s.darkHex, border: "1.5px solid " + darkStroke, boxSizing: "border-box", cursor: "pointer" }}
-                                  onClick={function () { setSelInfo({ hex: s.darkHex, label: s.label }); }}
-                                  title={s.darkHex}
-                                />
-                              );
-                            })}
-                          </div>
-                          {(type === "categorical" || type === "spectrum") && (
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
-                              <BarChart slots={slots} dark={true} stroke={darkStroke} darkBg={darkStroke} useLight={false} />
-                              <DonutChart slots={slots} dark={true} stroke={darkStroke} darkBg={darkStroke} useLight={false} />
-                              <LineChart slots={slots} dark={true} darkBg={darkStroke} useLight={false} />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+        <div style={{ maxWidth: 1500, margin: "0 auto", padding: "16px 16px 50px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+            {opts.map(function (opt, oi) {
+              var catSlots = opt[activeTab] || opt.categorical;
+              var semSlots = opt.semantic;
+              var deemSlots = opt.deemphasis;
+              var lStk = "#ffffff";
+              var dStk = darkStroke;
+              var subLbl = { fontSize: 11, fontWeight: 700, fontFamily: "'Space Mono',monospace", marginBottom: 4 };
+
+              return (
+                <div key={oi}>
+                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 22, letterSpacing: "0.08em", color: "#333", marginBottom: 8 }}>
+                    Option {oi + 1}
+                  </div>
+
+                  {/* ── L SECTION ── */}
+                  <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#999", marginBottom: 4 }}>{oi + 1}L · White Stroke</div>
+
+                  <CCard dk={false}>
+                    <CSwatches slots={catSlots} useL={true} stk={lStk} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+                      <BarChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} />
+                      <DonutChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} />
+                      <LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={true} />
+                    </div>
+                  </CCard>
+
+                  <CCard dk={true}>
+                    <CSwatches slots={catSlots} useL={true} stk={lStk} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+                      <BarChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} />
+                      <DonutChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} />
+                      <LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={true} />
+                    </div>
+                  </CCard>
+
+                  <CCard dk={false}>
+                    <div style={Object.assign({}, subLbl, { color: "#999" })}>Semantic</div>
+                    <CSwatches slots={semSlots} useL={true} stk={lStk} />
+                    <div style={Object.assign({}, subLbl, { color: "#999", marginTop: 6 })}>Deemphasis</div>
+                    <CSwatches slots={deemSlots} useL={true} stk={lStk} />
+                    <CSemLabels slots={semSlots} useL={true} bg="#ffffff" />
+                  </CCard>
+
+                  <CCard dk={true}>
+                    <div style={Object.assign({}, subLbl, { color: "rgba(255,255,255,0.4)" })}>Semantic</div>
+                    <CSwatches slots={semSlots} useL={true} stk={lStk} />
+                    <div style={Object.assign({}, subLbl, { color: "rgba(255,255,255,0.4)", marginTop: 6 })}>Deemphasis</div>
+                    <CSwatches slots={deemSlots} useL={true} stk={lStk} />
+                    <CSemLabels slots={semSlots} useL={true} bg={dStk} />
+                  </CCard>
+
+                  {/* ── BLACK SEPARATOR ── */}
+                  <div style={{ height: 3, backgroundColor: "#000", borderRadius: 2, margin: "14px 0" }} />
+
+                  {/* ── D SECTION ── */}
+                  <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Space Mono',monospace", color: "#999", marginBottom: 4 }}>{oi + 1}D · Dark Stroke</div>
+
+                  <CCard dk={false}>
+                    <CSwatches slots={catSlots} useL={false} stk={dStk} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+                      <BarChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} />
+                      <DonutChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} />
+                      <LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={false} />
+                    </div>
+                  </CCard>
+
+                  <CCard dk={true}>
+                    <CSwatches slots={catSlots} useL={false} stk={dStk} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+                      <BarChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} />
+                      <DonutChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} />
+                      <LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={false} />
+                    </div>
+                  </CCard>
+
+                  <CCard dk={false}>
+                    <div style={Object.assign({}, subLbl, { color: "#999" })}>Semantic</div>
+                    <CSwatches slots={semSlots} useL={false} stk={dStk} />
+                    <div style={Object.assign({}, subLbl, { color: "#999", marginTop: 6 })}>Deemphasis</div>
+                    <CSwatches slots={deemSlots} useL={false} stk={dStk} />
+                    <CSemLabels slots={semSlots} useL={false} bg="#ffffff" />
+                  </CCard>
+
+                  <CCard dk={true}>
+                    <div style={Object.assign({}, subLbl, { color: "rgba(255,255,255,0.4)" })}>Semantic</div>
+                    <CSwatches slots={semSlots} useL={false} stk={dStk} />
+                    <div style={Object.assign({}, subLbl, { color: "rgba(255,255,255,0.4)", marginTop: 6 })}>Deemphasis</div>
+                    <CSwatches slots={deemSlots} useL={false} stk={dStk} />
+                    <CSemLabels slots={semSlots} useL={false} bg={dStk} />
+                  </CCard>
+
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
         {selInfo && <ColorDetail info={selInfo} onClose={function () { setSelInfo(null); }} />}
       </div>
@@ -794,9 +865,6 @@ export default function App() {
                 var rgb = h2r(c.hex);
                 var l = getLum(rgb.r, rgb.g, rgb.b);
                 var fg = l > 0.35 ? "#111" : "#fff";
-                var fgSub = l > 0.35 ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.55)";
-                var cmyk = r2cmyk(rgb.r, rgb.g, rgb.b);
-                var p = findPMS(c.hex);
                 return (
                   <div key={i} style={{ width: 90, borderRadius: 8, overflow: "hidden", border: "1px solid #e0e0e0" }}>
                     <div style={{ height: 44, backgroundColor: c.hex, display: "flex", alignItems: "flex-end", padding: "0 6px 3px", boxSizing: "border-box" }}>
@@ -807,12 +875,6 @@ export default function App() {
                     <div style={{ padding: "4px 6px 5px", backgroundColor: "#fafafa" }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#222", fontFamily: "'Space Mono',monospace" }}>
                         {c.hex.toUpperCase()}
-                      </div>
-                      <div style={{ fontSize: 10, color: "#999", fontFamily: "'Space Mono',monospace", marginTop: 1 }}>
-                        R{rgb.r} G{rgb.g} B{rgb.b}
-                      </div>
-                      <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'Space Mono',monospace" }}>
-                        {c.pms ? c.pms : (p ? "~" + p.name : "")}
                       </div>
                     </div>
                   </div>
