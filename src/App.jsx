@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import PptxGenJS from "pptxgenjs";
 
 /* ═══ PANTONE DB ═══ */
 var PDB = [
@@ -161,9 +162,45 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
   return {categorical:cat, semantic:sem, deemphasis:deem, spectrum:spectrum};
 }
 
-/* ═══ STORAGE ═══ */
-async function sGet(k) { try { var raw=localStorage.getItem(k); return raw?JSON.parse(raw):null; } catch(e) { return null; } }
-async function sSet(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch(e) {} }
+/* ═══ SUPABASE STORAGE ═══ */
+var SB_URL="https://xcgdnzypisbzxhaooswb.supabase.co";
+var SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZ2RuenlwaXNienhoYW9vc3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0OTg3MjYsImV4cCI6MjA5MDA3NDcyNn0._-3ZW05XMM50hvX4Vk2ltt6VWKITUcD0c3fWtuNiJ4Y";
+var SB_HDR={"Content-Type":"application/json","apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Prefer":"return=representation"};
+
+async function sbFetchBrands() {
+  try {
+    var res=await fetch(SB_URL+"/rest/v1/dvp_brands?select=id,name,colors,dark_stroke,palettes&order=name",{headers:SB_HDR});
+    if(!res.ok) return {};
+    var rows=await res.json();
+    var out={};
+    rows.forEach(function(r){out[r.id]={name:r.name,colors:r.colors,darkStroke:r.dark_stroke,palettes:r.palettes};});
+    return out;
+  } catch(e){return {};}
+}
+
+async function sbUpsertBrand(key, data) {
+  try {
+    await fetch(SB_URL+"/rest/v1/dvp_brands",{method:"POST",headers:Object.assign({},SB_HDR,{"Prefer":"resolution=merge-duplicates,return=representation"}),body:JSON.stringify({id:key,name:data.name,colors:data.colors,dark_stroke:data.darkStroke||"#032054",palettes:data.palettes||null,updated_at:new Date().toISOString()})});
+  } catch(e){}
+}
+
+async function sbDeleteBrand(key) {
+  try {
+    await fetch(SB_URL+"/rest/v1/dvp_brands?id=eq."+encodeURIComponent(key),{method:"DELETE",headers:SB_HDR});
+  } catch(e){}
+}
+
+async function sbSavePalettes(key, palettes) {
+  try {
+    await fetch(SB_URL+"/rest/v1/dvp_brands?id=eq."+encodeURIComponent(key),{method:"PATCH",headers:SB_HDR,body:JSON.stringify({palettes:palettes,updated_at:new Date().toISOString()})});
+  } catch(e){}
+}
+
+async function sbSaveDarkStroke(key, ds) {
+  try {
+    await fetch(SB_URL+"/rest/v1/dvp_brands?id=eq."+encodeURIComponent(key),{method:"PATCH",headers:SB_HDR,body:JSON.stringify({dark_stroke:ds,updated_at:new Date().toISOString()})});
+  } catch(e){}
+}
 
 /* ═══ CHARTS ═══ */
 function BarChart(p) {
@@ -228,14 +265,14 @@ function OptionPanel(props) {
   var pal=props.pal,isDark=props.isDark,stroke=props.stroke,darkBg=props.darkBg;
   var activeTab=props.activeTab,onHue=props.onHue,onLight=props.onLight,onSelect=props.onSelect;
   var mode=isDark?"D":"L"; var catSlots=pal.categorical||[]; var specSlots=pal.spectrum||[]; var semSlots=pal.semantic||[]; var deemSlots=pal.deemphasis||[];
-  function SL(lp){return (<div style={{marginBottom:4,marginTop:14,display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:"0.08em",color:"#555"}}>{lp.text}</span>{lp.sub&&<span style={{fontSize:12,color:"#bbb",fontFamily:"'Space Mono',monospace"}}>{lp.sub}</span>}</div>);}
+  function SL(lp){return (<div style={{marginBottom:4,marginTop:14,display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:"0.08em",color:"#555"}}>{lp.text}</span>{lp.sub&&<span style={{fontSize:12,color:"#777",fontFamily:"'Space Mono',monospace"}}>{lp.sub}</span>}</div>);}
   function renderSwatches(slots,type){return (<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{slots.map(function(s){var hex=isDark?s.darkHex:s.lightHex;return (<Swatch key={type+"-"+s.id+"-"+s.hue+"-"+mode} hex={hex} stroke={stroke} isDark={isDark} darkBg={darkBg} onHue={onHue?function(){onHue(type,s.id);}:null} onLight={onLight?function(){onLight(type,s.id);}:null} onSelect={onSelect} label={s.label} slotId={s.id} slotType={type} />);})}</div>);}
   return (
     <div style={{flex:1,minWidth:0}}>
       <div style={{marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
         <div style={{width:14,height:14,borderRadius:3,backgroundColor:stroke,border:"1px solid #ddd"}} />
         <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:21,letterSpacing:"0.08em",color:"#222"}}>{mode} · {stroke==="#ffffff"?"White":"Dark"} Stroke</span>
-        <span style={{fontSize:12,color:"#bbb",fontFamily:"'Space Mono',monospace"}}>AA 4.5:1 vs {isDark?darkBg:"#FFF"}</span>
+        <span style={{fontSize:12,color:"#777",fontFamily:"'Space Mono',monospace"}}>AA 4.5:1 vs {isDark?darkBg:"#FFF"}</span>
       </div>
       <SL text="Categorical" sub="max neighbor contrast" />
       {renderSwatches(catSlots,"categorical")}
@@ -293,15 +330,15 @@ function ColorDetail(props) {
         </div>
         <div style={{padding:14}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontFamily:"'Space Mono',monospace",fontSize:14,marginBottom:10}}>
-            <div><span style={{color:"#aaa"}}>HEX</span><br /><b>{info.hex.toUpperCase()}</b></div>
-            <div><span style={{color:"#aaa"}}>RGB</span><br /><b>{rgb.r},{rgb.g},{rgb.b}</b></div>
-            <div><span style={{color:"#aaa"}}>HSL</span><br /><b>{Math.round(hsl.h)}&deg; {Math.round(hsl.s)}% {Math.round(hsl.l)}%</b></div>
-            <div><span style={{color:"#aaa"}}>CMYK</span><br /><b>{cmyk.c}/{cmyk.m}/{cmyk.y}/{cmyk.k}</b></div>
+            <div><span style={{color:"#777"}}>HEX</span><br /><b>{info.hex.toUpperCase()}</b></div>
+            <div><span style={{color:"#777"}}>RGB</span><br /><b>{rgb.r},{rgb.g},{rgb.b}</b></div>
+            <div><span style={{color:"#777"}}>HSL</span><br /><b>{Math.round(hsl.h)}&deg; {Math.round(hsl.s)}% {Math.round(hsl.l)}%</b></div>
+            <div><span style={{color:"#777"}}>CMYK</span><br /><b>{cmyk.c}/{cmyk.m}/{cmyk.y}/{cmyk.k}</b></div>
           </div>
           {p&&(<div style={{borderTop:"1px solid #eee",paddingTop:6,marginBottom:6,display:"flex",alignItems:"center",gap:5}}><div style={{width:16,height:16,borderRadius:3,backgroundColor:p.h,border:"1px solid #ddd"}} /><span style={{fontFamily:"'Space Mono',monospace",fontSize:13,fontWeight:700}}>PMS {p.n}</span></div>)}
           <div style={{borderTop:"1px solid #eee",paddingTop:6,display:"flex",flexDirection:"column",gap:3}}>
-            <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#888",width:50,fontFamily:"'Space Mono',monospace"}}>White</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cw}</span><Badge v={cw} /></div>
-            <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#888",width:50,fontFamily:"'Space Mono',monospace"}}>Dark</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cd}</span><Badge v={cd} /></div>
+            <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#666",width:50,fontFamily:"'Space Mono',monospace"}}>White</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cw}</span><Badge v={cw} /></div>
+            <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#666",width:50,fontFamily:"'Space Mono',monospace"}}>Dark</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cd}</span><Badge v={cd} /></div>
           </div>
           <button onClick={onClose} style={{width:"100%",padding:7,borderRadius:6,border:"none",backgroundColor:"#222",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginTop:10}}>Close</button>
         </div>
@@ -314,7 +351,7 @@ function ColorDetail(props) {
 function BrandStrip(props) {
   var bc=props.brandColors; if(!bc||!bc.length) return null;
   return (<div style={{backgroundColor:"#fff",borderRadius:10,padding:"10px 14px",border:"1px solid #eee",marginBottom:10}}>
-    <span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#aaa",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>Brand Colors ({bc.length})</span>
+    <span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#777",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>Brand Colors ({bc.length})</span>
     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{bc.map(function(c,i){var rgb=h2r(c.hex);var l=getLum(rgb.r,rgb.g,rgb.b);var fg=l>0.35?"#111":"#fff";return (<div key={i} style={{width:90,borderRadius:8,overflow:"hidden",border:"1px solid #e0e0e0"}}><div style={{height:44,backgroundColor:c.hex,display:"flex",alignItems:"flex-start",padding:"4px 6px 0",boxSizing:"border-box"}}><span style={{fontSize:11,fontWeight:700,color:fg,fontFamily:"'Space Mono',monospace",lineHeight:1.2}}>{c.name}</span></div><div style={{padding:"4px 6px 5px",backgroundColor:"#fafafa"}}><div style={{fontSize:12,fontWeight:700,color:"#222",fontFamily:"'Space Mono',monospace"}}>{c.hex.toUpperCase()}</div></div></div>);})}</div>
   </div>);
 }
@@ -330,7 +367,7 @@ function CompareView(props) {
     <div style={{minHeight:"100vh",background:"#edeef0",fontFamily:"'Outfit',sans-serif"}}>
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
       <div style={{position:"sticky",top:0,zIndex:30}}>
-      <div style={{background:"linear-gradient(135deg,#111,#333)",padding:"18px 24px 14px"}}><div style={{maxWidth:1500,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}><h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:33,color:"#fff",letterSpacing:"0.06em"}}>Compare All{activeBrand?" \u00B7 "+brands[activeBrand].name:""}</h1><button onClick={function(){setCompare(false);}} style={{padding:"8px 18px",borderRadius:6,border:"1px solid #555",backgroundColor:"transparent",color:"#ccc",fontSize:15,cursor:"pointer",fontWeight:600}}>Back to Editor</button></div></div>
+      <div style={{background:"linear-gradient(135deg,#111,#333)",padding:"18px 24px 14px"}}><div style={{maxWidth:1500,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}><h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:33,color:"#fff",letterSpacing:"0.06em"}}>Compare All{activeBrand?" \u00B7 "+brands[activeBrand].name:""}</h1><button onClick={function(){setCompare(false);}} style={{padding:"8px 18px",borderRadius:6,border:"1px solid #555",backgroundColor:"transparent",color:"#666",fontSize:15,cursor:"pointer",fontWeight:600}}>Back to Editor</button></div></div>
       <div style={{maxWidth:1500,margin:"0 auto",padding:"6px 16px 0",background:"#edeef0"}}><BrandStrip brandColors={brandColors} /></div>
       </div>
       <div style={{maxWidth:1500,margin:"0 auto",padding:"0 16px 50px"}}>
@@ -339,16 +376,16 @@ function CompareView(props) {
             var catSlots=opt.categorical,specSlots=opt.spectrum,semSlots=opt.semantic,deemSlots=opt.deemphasis,lStk="#ffffff",dStk=darkStroke;
             return (<div key={oi}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:"0.08em",color:"#333",marginBottom:8}}>Option {oi+1}</div>
-              <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#999",marginBottom:4}}>{oi+1}L · White Stroke</div>
-              <CC dk={false}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#ccc",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={true} /></div></CC>
+              <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#666",marginBottom:4}}>{oi+1}L · White Stroke</div>
+              <CC dk={false}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#666",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={false} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={true} /></div></CC>
               <CC dk={true}><CS slots={catSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"rgba(255,255,255,0.3)",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={true} stk={lStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><DonutChart slots={catSlots} dark={true} stroke={lStk} darkBg={dStk} useLight={true} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={true} /></div></CC>
-              <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={true} bg="#ffffff" stk="#ffffff" /></CC>
+              <CC dk={false}><div style={Object.assign({},sub,{color:"#666"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#666",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={true} bg="#ffffff" stk="#ffffff" /></CC>
               <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={true} stk={lStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={true} stk={lStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={true} bg={dStk} stk="#ffffff" /></CC>
               <div style={{height:3,backgroundColor:"#000",borderRadius:2,margin:"14px 0"}} />
-              <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#999",marginBottom:4}}>{oi+1}D · Dark Stroke</div>
-              <CC dk={false}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#ccc",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={false} /></div></CC>
+              <div style={{fontSize:13,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#666",marginBottom:4}}>{oi+1}D · Dark Stroke</div>
+              <CC dk={false}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#666",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={false} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={false} darkBg={dStk} useLight={false} /></div></CC>
               <CC dk={true}><CS slots={catSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"rgba(255,255,255,0.3)",marginBottom:3}}>Spectrum</div><CS slots={specSlots} useL={false} stk={dStk} oi={oi} type="categorical" /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}><BarChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><DonutChart slots={catSlots} dark={true} stroke={dStk} darkBg={dStk} useLight={false} /><LineChart slots={catSlots} dark={true} darkBg={dStk} useLight={false} /></div></CC>
-              <CC dk={false}><div style={Object.assign({},sub,{color:"#999"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#999",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={false} bg="#ffffff" stk={dStk} /></CC>
+              <CC dk={false}><div style={Object.assign({},sub,{color:"#666"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"#666",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={false} bg="#ffffff" stk={dStk} /></CC>
               <CC dk={true}><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)"})}>Semantic</div><CS slots={semSlots} useL={false} stk={dStk} oi={oi} type="semantic" /><div style={Object.assign({},sub,{color:"rgba(255,255,255,0.4)",marginTop:6})}>Deemphasis</div><CS slots={deemSlots} useL={false} stk={dStk} oi={oi} type="deemphasis" /><CSL slots={semSlots} useL={false} bg={dStk} stk={dStk} /></CC>
             </div>);
           })}
@@ -378,21 +415,20 @@ export default function App() {
   function show(msg){setToast(msg);setTimeout(function(){setToast("");},2500);}
   function regen(bc,ds,seed){setOpts([generatePalettes(bc,0,ds,seed),generatePalettes(bc,1,ds,seed),generatePalettes(bc,2,ds,seed)]);}
 
-  useEffect(function(){sGet("dvcs-brands").then(function(b){if(b)setBrands(b);setLoaded(true);});},[]);
+  useEffect(function(){sbFetchBrands().then(function(b){setBrands(b);setLoaded(true);});},[]);
   useEffect(function(){if(!loaded)return;if(!activeBrand){regen([],darkStroke,reworkSeed);setBrandColors([]);}},[loaded,activeBrand]);
 
   var loadBrand=useCallback(function(key){
     setActiveBrand(key); var b=brands[key]; if(!b)return;
     setBrandColors(b.colors); var ds=b.darkStroke||"#032054"; setDarkStroke(ds);
-    /* Load saved palette state or regenerate */
-    sGet("dvcs-pal-"+key).then(function(saved){if(saved){setOpts(saved);}else{regen(b.colors,ds,0);}});
+    if(b.palettes){setOpts(b.palettes);}else{regen(b.colors,ds,0);}
   },[brands]);
 
-  function deleteBrand(key){var nb=Object.assign({},brands);delete nb[key];setBrands(nb);sSet("dvcs-brands",nb);if(activeBrand===key){setActiveBrand(null);setBrandColors([]);regen([],darkStroke,0);}show("Deleted");}
+  function deleteBrand(key){var nb=Object.assign({},brands);delete nb[key];setBrands(nb);sbDeleteBrand(key);if(activeBrand===key){setActiveBrand(null);setBrandColors([]);regen([],darkStroke,0);}show("Deleted");}
 
-  function saveDarkStroke(ds){setDarkStroke(ds);regen(brandColors,ds,reworkSeed);if(activeBrand){var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].darkStroke=ds;setBrands(nb);sSet("dvcs-brands",nb);}}
+  function saveDarkStroke(ds){setDarkStroke(ds);regen(brandColors,ds,reworkSeed);if(activeBrand){var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].darkStroke=ds;setBrands(nb);sbSaveDarkStroke(activeBrand,ds);}}
 
-  function savePalettes(){if(activeBrand){sSet("dvcs-pal-"+activeBrand,opts);show("Saved!");}else{show("Upload a brand first");}}
+  function savePalettes(){if(activeBrand){sbSavePalettes(activeBrand,opts);var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].palettes=opts;setBrands(nb);show("Saved!");}else{show("Upload a brand first");}}
 
   function reworkAll(){var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);regen(brandColors,darkStroke,newSeed);show("Reworked!");}
 
@@ -418,6 +454,100 @@ export default function App() {
     setPptModal(null);
   }
 
+  function downloadPptx() {
+    if (!cur) return;
+    var pptx = new PptxGenJS();
+    pptx.layout = "LAYOUT_WIDE";
+    var brandName = activeBrand ? brands[activeBrand].name : "Generic";
+    pptx.title = brandName + " Data Vis Palette";
+    var hx = function(hex) { return hex.replace("#",""); };
+    var dsHx = hx(darkStroke);
+
+    function addSwatchSlide(title, slots, isDk, bgColor) {
+      var slide = pptx.addSlide();
+      if (bgColor) slide.background = { color: hx(bgColor) };
+      var txtColor = bgColor && bgColor !== "#ffffff" ? "FFFFFF" : "222222";
+      slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 24, fontFace: "Arial", color: txtColor, bold: true });
+
+      var cols = Math.min(slots.length, 9);
+      var swW = 1.2, swH = 0.8, gap = 0.12, startX = 0.5, startY = 1.1;
+      slots.forEach(function(s, i) {
+        var col = i % cols;
+        var row = Math.floor(i / cols);
+        var x = startX + col * (swW + gap);
+        var y = startY + row * (swH + 0.45);
+        var hex = isDk ? s.darkHex : s.lightHex;
+        slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, { x: x, y: y, w: swW, h: swH, fill: { color: hx(hex) }, rectRadius: 0.08 });
+        slide.addText(hex.toUpperCase(), { x: x, y: y + swH + 0.02, w: swW, h: 0.25, fontSize: 8, fontFace: "Courier New", color: txtColor, align: "center" });
+      });
+    }
+
+    function addChartSlide(title, slots, isDk, bgColor) {
+      var slide = pptx.addSlide();
+      if (bgColor) slide.background = { color: hx(bgColor) };
+      var txtColor = bgColor && bgColor !== "#ffffff" ? "FFFFFF" : "222222";
+      slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 24, fontFace: "Arial", color: txtColor, bold: true });
+
+      /* Bar chart */
+      var barData = [{ name: "Values", labels: [], values: [], color: [] }];
+      var chartSlots = slots.slice(0, 9);
+      chartSlots.forEach(function(s, i) {
+        var hex = isDk ? s.darkHex : s.lightHex;
+        barData[0].labels.push("C" + (i + 1));
+        barData[0].values.push([82, 54, 71, 38, 63, 47, 29, 55, 45][i] || 40);
+        barData[0].color.push(hx(hex));
+      });
+      slide.addChart(pptx.charts.BAR, barData, { x: 0.5, y: 1.2, w: 5.5, h: 3.5, showLegend: false, showValue: false, catAxisHidden: true, valAxisHidden: true, plotBorder: { pt: 0 }, chartColors: barData[0].color });
+
+      /* Donut chart */
+      var pieData = [{ name: "Share", labels: [], values: [], color: [] }];
+      var pieVals = [30, 22, 18, 12, 10, 8, 5, 4, 3];
+      chartSlots.forEach(function(s, i) {
+        var hex = isDk ? s.darkHex : s.lightHex;
+        pieData[0].labels.push("C" + (i + 1));
+        pieData[0].values.push(pieVals[i] || 3);
+        pieData[0].color.push(hx(hex));
+      });
+      slide.addChart(pptx.charts.DOUGHNUT, pieData, { x: 7, y: 1.2, w: 3.5, h: 3.5, showLegend: false, showTitle: false, holeSize: 50, chartColors: pieData[0].color });
+    }
+
+    function addSemanticSlide(title, slots, isDk, bgColor) {
+      var slide = pptx.addSlide();
+      if (bgColor) slide.background = { color: hx(bgColor) };
+      var txtColor = bgColor && bgColor !== "#ffffff" ? "FFFFFF" : "222222";
+      slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 24, fontFace: "Arial", color: txtColor, bold: true });
+
+      slots.forEach(function(s, i) {
+        var hex = isDk ? s.darkHex : s.lightHex;
+        var y = 1.2 + i * 1.0;
+        slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, { x: 0.5, y: y, w: 2.5, h: 0.7, fill: { color: hx(hex) }, rectRadius: 0.06 });
+        slide.addText(s.label, { x: 3.2, y: y, w: 3, h: 0.7, fontSize: 18, fontFace: "Arial", color: hx(hex), bold: true, valign: "middle" });
+        slide.addText(hex.toUpperCase(), { x: 6.2, y: y, w: 2, h: 0.7, fontSize: 12, fontFace: "Courier New", color: txtColor, valign: "middle" });
+      });
+    }
+
+    /* L slides */
+    addSwatchSlide(brandName + " · Categorical · L", cur.categorical, false, "#ffffff");
+    addChartSlide(brandName + " · Categorical Charts · L on White", cur.categorical, false, "#ffffff");
+    addChartSlide(brandName + " · Categorical Charts · L on Dark", cur.categorical, false, darkStroke);
+    addSwatchSlide(brandName + " · Spectrum · L", cur.spectrum, false, "#ffffff");
+    addSemanticSlide(brandName + " · Semantic · L on White", cur.semantic, false, "#ffffff");
+    addSemanticSlide(brandName + " · Semantic · L on Dark", cur.semantic, false, darkStroke);
+    addSwatchSlide(brandName + " · Deemphasis · L", cur.deemphasis, false, "#ffffff");
+
+    /* D slides */
+    addSwatchSlide(brandName + " · Categorical · D", cur.categorical, true, darkStroke);
+    addChartSlide(brandName + " · Categorical Charts · D on White", cur.categorical, true, "#ffffff");
+    addChartSlide(brandName + " · Categorical Charts · D on Dark", cur.categorical, true, darkStroke);
+    addSwatchSlide(brandName + " · Spectrum · D", cur.spectrum, true, darkStroke);
+    addSemanticSlide(brandName + " · Semantic · D on White", cur.semantic, true, "#ffffff");
+    addSemanticSlide(brandName + " · Semantic · D on Dark", cur.semantic, true, darkStroke);
+    addSwatchSlide(brandName + " · Deemphasis · D", cur.deemphasis, true, darkStroke);
+
+    pptx.writeFile({ fileName: brandName + "_DataVisPalette_Opt" + (activeOpt + 1) + ".pptx" });
+    show("Downloading PPTX...");
+  }
+
   var handleUpload=useCallback(function(file){
     if(!file||!uploadName.trim())return;
     file.text().then(function(text){
@@ -429,7 +559,7 @@ export default function App() {
       var darkest=colors[0],darkestL=999;colors.forEach(function(c){var rgb=h2r(c.hex);var ll=getLum(rgb.r,rgb.g,rgb.b);if(ll<darkestL){darkestL=ll;darkest=c;}});
       var key=uploadName.trim().replace(/[^a-zA-Z0-9_-]/g,"_").toLowerCase();
       var nb=Object.assign({},brands);nb[key]={name:uploadName.trim(),colors:colors,darkStroke:darkest.hex};
-      setBrands(nb);sSet("dvcs-brands",nb);setShowUpload(false);setUploadName("");
+      setBrands(nb);sbUpsertBrand(key,nb[key]);setShowUpload(false);setUploadName("");
       setDarkStroke(darkest.hex);setActiveBrand(key);setBrandColors(colors);regen(colors,darkest.hex,0);show(uploadName.trim()+" loaded");
     });
   },[brands,uploadName]);
@@ -510,7 +640,7 @@ export default function App() {
   },[darkStroke,activeOpt]);
 
   var cur=opts[activeOpt];
-  if(!loaded||!cur) return <div style={{padding:40,textAlign:"center",color:"#888"}}>Loading...</div>;
+  if(!loaded||!cur) return <div style={{padding:40,textAlign:"center",color:"#666"}}>Loading...</div>;
   var tabs=[{k:"categorical",l:"Categorical"},{k:"spectrum",l:"Spectrum"}];
 
   if(compare) return <CompareView opts={opts} darkStroke={darkStroke} activeTab={activeTab} brandColors={brandColors} brands={brands} activeBrand={activeBrand} setSelInfo={setSelInfo} setCompare={setCompare} setSlotHSL={setSlotHSL} selInfo={selInfo} hueShift={hueShift} lightShift={lightShift} />;
@@ -529,16 +659,16 @@ export default function App() {
       </div>
       {/* Dark Stroke */}
       <div style={{maxWidth:1200,margin:"0 auto",padding:"0 16px"}}><div style={{backgroundColor:"#fff",borderRadius:10,padding:"10px 14px",display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",border:"1px solid #eee"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#888",letterSpacing:"0.1em",textTransform:"uppercase"}}>Dark Stroke</span><div style={{position:"relative",width:28,height:28,borderRadius:6,backgroundColor:darkStroke,border:"2px solid #ddd",cursor:"pointer",overflow:"hidden"}}><input type="color" value={darkStroke} onChange={function(e){saveDarkStroke(e.target.value);}} style={{position:"absolute",inset:-4,width:"140%",height:"140%",cursor:"pointer",opacity:0}} /></div><span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#aaa"}}>{darkStroke.toUpperCase()}</span></div>
-        {brandColors.length>0&&(<div style={{display:"flex",gap:3,alignItems:"center"}}><span style={{fontSize:10,color:"#bbb",fontFamily:"'Space Mono',monospace"}}>Brand:</span>{brandColors.map(function(c,i){return (<div key={i} onClick={function(){saveDarkStroke(c.hex);}} style={{width:22,height:22,borderRadius:4,backgroundColor:c.hex,border:darkStroke===c.hex?"2px solid #ff8800":"1px solid #ddd",cursor:"pointer"}} title={c.name} />);})}</div>)}
+        <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#666",letterSpacing:"0.1em",textTransform:"uppercase"}}>Dark Stroke</span><div style={{position:"relative",width:28,height:28,borderRadius:6,backgroundColor:darkStroke,border:"2px solid #ddd",cursor:"pointer",overflow:"hidden"}}><input type="color" value={darkStroke} onChange={function(e){saveDarkStroke(e.target.value);}} style={{position:"absolute",inset:-4,width:"140%",height:"140%",cursor:"pointer",opacity:0}} /></div><span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#777"}}>{darkStroke.toUpperCase()}</span></div>
+        {brandColors.length>0&&(<div style={{display:"flex",gap:3,alignItems:"center"}}><span style={{fontSize:10,color:"#777",fontFamily:"'Space Mono',monospace"}}>Brand:</span>{brandColors.map(function(c,i){return (<div key={i} onClick={function(){saveDarkStroke(c.hex);}} style={{width:22,height:22,borderRadius:4,backgroundColor:c.hex,border:darkStroke===c.hex?"2px solid #ff8800":"1px solid #ddd",cursor:"pointer"}} title={c.name} />);})}</div>)}
         {/* Brand dropdown + Save */}
         {Object.keys(brands).length>0&&(<div style={{display:"flex",gap:6,marginLeft:"auto",alignItems:"center"}}>
           <button onClick={savePalettes} style={{padding:"5px 12px",borderRadius:6,border:"1px solid #1a7a3d",backgroundColor:"#e8f5e9",color:"#1a7a3d",fontSize:12,fontWeight:700,cursor:"pointer"}}>Save</button>
           <div style={{position:"relative"}}>
             <button onClick={function(){setBrandDD(!brandDD);}} style={{padding:"5px 12px",borderRadius:6,border:"1px solid #ddd",backgroundColor:activeBrand?"#fff5e6":"#fff",color:"#333",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><span>{activeBrand?brands[activeBrand].name:"Select Brand"}</span><svg width="8" height="5" viewBox="0 0 8 5" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round"><path d="M1 1l3 3 3-3" /></svg></button>
             {brandDD&&(<div><div onClick={function(){setBrandDD(false);}} style={{position:"fixed",inset:0,zIndex:39}} /><div style={{position:"absolute",top:"100%",right:0,marginTop:4,backgroundColor:"#fff",borderRadius:8,border:"1px solid #ddd",boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:40,minWidth:200,overflow:"hidden"}}>
-              <div onClick={function(){setActiveBrand(null);setBrandDD(false);}} style={{padding:"8px 12px",fontSize:13,color:"#888",cursor:"pointer",borderBottom:"1px solid #f0f0f0",backgroundColor:!activeBrand?"#f7f7f7":"#fff"}}>No Brand (Generic)</div>
-              {Object.entries(brands).map(function(entry){var k=entry[0],v=entry[1];var isAct=activeBrand===k;return (<div key={k} style={{display:"flex",alignItems:"center",borderBottom:"1px solid #f5f5f5"}}><div onClick={function(){loadBrand(k);setBrandDD(false);}} style={{flex:1,padding:"8px 12px",fontSize:13,fontWeight:isAct?700:400,color:isAct?"#333":"#555",cursor:"pointer",backgroundColor:isAct?"#fff5e6":"#fff"}}>{v.name}<span style={{fontSize:11,color:"#bbb",marginLeft:6}}>{v.colors.length} colors</span></div><button onClick={function(e){e.stopPropagation();deleteBrand(k);}} style={{padding:"4px 10px",border:"none",backgroundColor:"transparent",color:"#ccc",fontSize:18,cursor:"pointer",lineHeight:1}}>&times;</button></div>);})}
+              <div onClick={function(){setActiveBrand(null);setBrandDD(false);}} style={{padding:"8px 12px",fontSize:13,color:"#666",cursor:"pointer",borderBottom:"1px solid #f0f0f0",backgroundColor:!activeBrand?"#f7f7f7":"#fff"}}>No Brand (Generic)</div>
+              {Object.entries(brands).map(function(entry){var k=entry[0],v=entry[1];var isAct=activeBrand===k;return (<div key={k} style={{display:"flex",alignItems:"center",borderBottom:"1px solid #f5f5f5"}}><div onClick={function(){loadBrand(k);setBrandDD(false);}} style={{flex:1,padding:"8px 12px",fontSize:13,fontWeight:isAct?700:400,color:isAct?"#333":"#555",cursor:"pointer",backgroundColor:isAct?"#fff5e6":"#fff"}}>{v.name}<span style={{fontSize:11,color:"#777",marginLeft:6}}>{v.colors.length} colors</span></div><button onClick={function(e){e.stopPropagation();deleteBrand(k);}} style={{padding:"4px 10px",border:"none",backgroundColor:"transparent",color:"#666",fontSize:18,cursor:"pointer",lineHeight:1}}>&times;</button></div>);})}
             </div></div>)}
           </div>
         </div>)}
@@ -549,6 +679,7 @@ export default function App() {
         <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{["Opt 1","Opt 2","Opt 3"].map(function(lbl,i){return (<button key={i} onClick={function(){setActiveOpt(i);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeOpt===i?"#333":"transparent",color:activeOpt===i?"#fff":"#888",fontWeight:activeOpt===i?700:400,fontSize:13,cursor:"pointer"}}>{lbl}</button>);})}</div>
         <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{tabs.map(function(t){return (<button key={t.k} onClick={function(){setActiveTab(t.k);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeTab===t.k?"#333":"transparent",color:activeTab===t.k?"#fff":"#888",fontWeight:activeTab===t.k?700:400,fontSize:13,cursor:"pointer"}}>{t.l}</button>);})}</div>
         <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework All Colors</button>
+        <button onClick={downloadPptx} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
       </div>
       {/* L and D side by side */}
       <div style={{maxWidth:1200,margin:"12px auto 0",padding:"0 16px 40px"}}>
@@ -563,24 +694,24 @@ export default function App() {
             function copyHexes(){var txt=allSlots.map(function(s){return s.hex.toUpperCase();}).join("\n");navigator.clipboard.writeText(txt);show("Hex values copied!");}
             function copyCMYK(){var txt=cmykData.map(function(ck){return ck.c+"\t"+ck.m+"\t"+ck.y+"\t"+ck.k;}).join("\n");navigator.clipboard.writeText(txt);show("CMYK values copied!");}
             var copyIcon=<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="1" width="10" height="10" rx="2" /><path d="M5 5h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5" /></svg>;
-            var copyBtnStyle={border:"none",backgroundColor:"transparent",color:"#bbb",cursor:"pointer",padding:2,display:"inline-flex",alignItems:"center",verticalAlign:"middle",marginLeft:3};
+            var copyBtnStyle={border:"none",backgroundColor:"transparent",color:"#777",cursor:"pointer",padding:2,display:"inline-flex",alignItems:"center",verticalAlign:"middle",marginLeft:3};
             return (<div key={isDk?"dt":"lt"}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                 <div style={{fontSize:14,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#555"}}>{label}</div>
                 <button onClick={function(){setPptModal(isDk);}} style={{padding:"3px 10px",borderRadius:4,border:"1px solid #ddd",backgroundColor:"#fff",color:"#666",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Space Mono',monospace"}}>Copy PPT XML</button>
-              </div><table style={{width:"100%",borderCollapse:"collapse",fontFamily:"'Space Mono',monospace",fontSize:11}}><thead><tr style={{borderBottom:"2px solid #333"}}><th style={{textAlign:"left",padding:"4px 6px",color:"#999",fontSize:10}}></th><th style={{textAlign:"left",padding:"4px 6px",color:"#999",fontSize:10}}>Hex<button onClick={copyHexes} style={copyBtnStyle} title="Copy all hex values">{copyIcon}</button></th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>C</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>M</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>Y</th><th style={{textAlign:"center",padding:"4px 4px",color:"#999",fontSize:10}}>K<button onClick={copyCMYK} style={copyBtnStyle} title="Copy all CMYK values">{copyIcon}</button></th></tr></thead><tbody>{allSlots.map(function(s,i){var ck=cmykData[i];return (<tr key={i} style={{borderBottom:"1px solid #eee"}}><td style={{padding:"4px 6px"}}><div style={{width:20,height:20,borderRadius:4,backgroundColor:s.hex,border:"1px solid #ddd"}} /></td><td style={{padding:"4px 6px",fontWeight:700,color:"#222"}}>{s.hex.toUpperCase()}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.c}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.m}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.y}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.k}</td></tr>);})}</tbody></table></div>);
+              </div><table style={{width:"100%",borderCollapse:"collapse",fontFamily:"'Space Mono',monospace",fontSize:11}}><thead><tr style={{borderBottom:"2px solid #333"}}><th style={{textAlign:"left",padding:"4px 6px",color:"#666",fontSize:10}}></th><th style={{textAlign:"left",padding:"4px 6px",color:"#666",fontSize:10}}>Hex<button onClick={copyHexes} style={copyBtnStyle} title="Copy all hex values">{copyIcon}</button></th><th style={{textAlign:"center",padding:"4px 4px",color:"#666",fontSize:10}}>C</th><th style={{textAlign:"center",padding:"4px 4px",color:"#666",fontSize:10}}>M</th><th style={{textAlign:"center",padding:"4px 4px",color:"#666",fontSize:10}}>Y</th><th style={{textAlign:"center",padding:"4px 4px",color:"#666",fontSize:10}}>K<button onClick={copyCMYK} style={copyBtnStyle} title="Copy all CMYK values">{copyIcon}</button></th></tr></thead><tbody>{allSlots.map(function(s,i){var ck=cmykData[i];return (<tr key={i} style={{borderBottom:"1px solid #eee"}}><td style={{padding:"4px 6px"}}><div style={{width:20,height:20,borderRadius:4,backgroundColor:s.hex,border:"1px solid #ddd"}} /></td><td style={{padding:"4px 6px",fontWeight:700,color:"#222"}}>{s.hex.toUpperCase()}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.c}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.m}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.y}</td><td style={{padding:"4px 4px",textAlign:"center",color:"#555"}}>{ck.k}</td></tr>);})}</tbody></table></div>);
           })}
         </div>
-        <div style={{marginTop:10,fontSize:11,color:"#bbb",fontFamily:"'Space Mono',monospace",textAlign:"center"}}>PMS Bridge Coated CMYK used where available. All colors WCAG AA 4.5:1.</div>
+        <div style={{marginTop:10,fontSize:11,color:"#777",fontFamily:"'Space Mono',monospace",textAlign:"center"}}>PMS Bridge Coated CMYK used where available. All colors WCAG AA 4.5:1.</div>
       </div>
       {/* Upload Modal */}
       {showUpload&&(<div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={function(){setShowUpload(false);}}>
         <div style={{backgroundColor:"#fff",borderRadius:12,maxWidth:380,width:"100%",padding:20,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
           <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,marginBottom:12}}>Upload Brand</h2>
-          <p style={{fontSize:14,color:"#888",marginBottom:12}}>CSV/TSV with Name + Hex columns.</p>
+          <p style={{fontSize:14,color:"#666",marginBottom:12}}>CSV/TSV with Name + Hex columns.</p>
           <input type="text" placeholder="Brand name" value={uploadName} onChange={function(e){setUploadName(e.target.value);}} style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #ddd",fontSize:15,marginBottom:8,boxSizing:"border-box"}} />
           <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" style={{display:"none"}} onChange={function(e){if(e.target.files&&e.target.files[0])handleUpload(e.target.files[0]);}} />
-          <div style={{display:"flex",gap:6}}><button onClick={function(){if(uploadName.trim())fileRef.current.click();else show("Enter a name");}} style={{flex:1,padding:9,borderRadius:7,border:"none",backgroundColor:uploadName.trim()?"#222":"#ccc",color:"#fff",fontWeight:700,fontSize:14,cursor:uploadName.trim()?"pointer":"not-allowed"}}>Choose File</button><button onClick={function(){setShowUpload(false);}} style={{padding:"9px 14px",borderRadius:7,border:"1px solid #ddd",backgroundColor:"#fff",color:"#888",fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button></div>
+          <div style={{display:"flex",gap:6}}><button onClick={function(){if(uploadName.trim())fileRef.current.click();else show("Enter a name");}} style={{flex:1,padding:9,borderRadius:7,border:"none",backgroundColor:uploadName.trim()?"#222":"#ccc",color:"#fff",fontWeight:700,fontSize:14,cursor:uploadName.trim()?"pointer":"not-allowed"}}>Choose File</button><button onClick={function(){setShowUpload(false);}} style={{padding:"9px 14px",borderRadius:7,border:"1px solid #ddd",backgroundColor:"#fff",color:"#666",fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button></div>
         </div>
       </div>)}
 
@@ -588,12 +719,12 @@ export default function App() {
       {pptModal!==null&&(<div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={function(){setPptModal(null);}}>
         <div style={{backgroundColor:"#fff",borderRadius:12,maxWidth:320,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}} onClick={function(e){e.stopPropagation();}}>
           <h3 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,marginBottom:6}}>PPT Custom Colors</h3>
-          <p style={{fontSize:13,color:"#888",marginBottom:16,fontFamily:"'Space Mono',monospace"}}>Do you want Spectrum colors?</p>
+          <p style={{fontSize:13,color:"#666",marginBottom:16,fontFamily:"'Space Mono',monospace"}}>Do you want Spectrum colors?</p>
           <div style={{display:"flex",gap:8,justifyContent:"center"}}>
             <button onClick={function(){copyPptXml(pptModal,true);}} style={{flex:1,padding:"10px 16px",borderRadius:7,border:"none",backgroundColor:"#333",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Yes</button>
             <button onClick={function(){copyPptXml(pptModal,false);}} style={{flex:1,padding:"10px 16px",borderRadius:7,border:"1px solid #ddd",backgroundColor:"#fff",color:"#333",fontWeight:700,fontSize:14,cursor:"pointer"}}>No</button>
           </div>
-          <button onClick={function(){setPptModal(null);}} style={{marginTop:10,border:"none",backgroundColor:"transparent",color:"#bbb",fontSize:12,cursor:"pointer"}}>Cancel</button>
+          <button onClick={function(){setPptModal(null);}} style={{marginTop:10,border:"none",backgroundColor:"transparent",color:"#777",fontSize:12,cursor:"pointer"}}>Cancel</button>
         </div>
       </div>)}
 
