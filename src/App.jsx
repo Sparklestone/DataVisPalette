@@ -40,6 +40,27 @@ function makePair(hue,sat,darkBg) {
   return {lightHex:adjustForContrast(hsl2hex(hue,s,50),"#ffffff",4.5),darkHex:adjustForContrast(hsl2hex(hue,s,50),darkBg||"#121212",4.5),hue:hue,sat:s};
 }
 
+/* ═══ CIE Lab perceptual color distance ═══ */
+function rgb2lab(r, g, b) {
+  /* sRGB → linear RGB → XYZ → Lab */
+  function lin(v) { v /= 255; return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92; }
+  var rl = lin(r), gl = lin(g), bl = lin(b);
+  /* XYZ (D65 white point) */
+  var x = (rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375) / 0.95047;
+  var y = (rl * 0.2126729 + gl * 0.7151522 + bl * 0.0721750) / 1.00000;
+  var z = (rl * 0.0193339 + gl * 0.1191920 + bl * 0.9503041) / 1.08883;
+  function f(t) { return t > 0.008856 ? Math.pow(t, 1/3) : (903.3 * t + 16) / 116; }
+  var fx = f(x), fy = f(y), fz = f(z);
+  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
+}
+
+/* Delta E (CIE76) — perceptual color difference. <10 similar, 10-20 noticeable, >25 clearly different */
+function deltaE(hexA, hexB) {
+  var ca = h2r(hexA), cb = h2r(hexB);
+  var la = rgb2lab(ca.r, ca.g, ca.b), lb = rgb2lab(cb.r, cb.g, cb.b);
+  return Math.sqrt(Math.pow(la.L - lb.L, 2) + Math.pow(la.a - lb.a, 2) + Math.pow(la.b - lb.b, 2));
+}
+
 /* Check minimum hue distance from all other hues in list */
 function minHueDist(hue, otherHues) {
   var minD = 360;
@@ -50,58 +71,70 @@ function minHueDist(hue, otherHues) {
   return minD;
 }
 
-/* Perceptual distance between two hex colors (Euclidean in RGB) */
-function colorDist(hexA, hexB) {
-  var a = h2r(hexA), b = h2r(hexB);
-  return Math.sqrt(Math.pow(a.r-b.r,2) + Math.pow(a.g-b.g,2) + Math.pow(a.b-b.b,2));
+/* Minimum Delta E from a hex to any hex in a list */
+function minDeltaE(hex, others) {
+  var minD = Infinity;
+  for (var i = 0; i < others.length; i++) {
+    var d = deltaE(hex, others[i]);
+    if (d < minD) minD = d;
+  }
+  return minD;
 }
 
+var MIN_DE = 22; /* minimum Delta E for "clearly different" */
+
 /* Check if a candidate color is distinct enough from all existing colors */
-function isDistinctEnough(candidateL, candidateD, existingPairs, minRGB) {
+function isDistinctEnough(candidateL, candidateD, existingPairs) {
   for (var i = 0; i < existingPairs.length; i++) {
-    if (colorDist(candidateL, existingPairs[i].lightHex) < minRGB) return false;
-    if (colorDist(candidateD, existingPairs[i].darkHex) < minRGB) return false;
+    if (deltaE(candidateL, existingPairs[i].lightHex) < MIN_DE) return false;
+    if (deltaE(candidateD, existingPairs[i].darkHex) < MIN_DE) return false;
   }
   return true;
 }
 
 /* Find a hue+sat combo that produces visually distinct L and D colors */
 function findDistinctColor(startHue, startSat, existingPairs, existingHues, darkBg) {
-  var MIN_HUE = 28;
-  var MIN_RGB = 75; /* perceptual distance threshold */
+  var MIN_HUE = 25;
   /* Try the start hue first */
-  var hue = startHue;
-  if (minHueDist(hue, existingHues) >= MIN_HUE) {
-    var pair = makePair(hue, startSat, darkBg);
-    if (isDistinctEnough(pair.lightHex, pair.darkHex, existingPairs, MIN_RGB)) {
-      return { hue: hue, sat: startSat, pair: pair };
+  if (minHueDist(startHue, existingHues) >= MIN_HUE) {
+    var pair = makePair(startHue, startSat, darkBg);
+    if (isDistinctEnough(pair.lightHex, pair.darkHex, existingPairs)) {
+      return { hue: startHue, sat: startSat, pair: pair };
     }
   }
-  /* Try shifting hue in increments, also vary saturation */
-  var satOptions = [startSat, Math.min(90, startSat + 20), Math.max(35, startSat - 20), Math.min(90, startSat + 35), Math.max(35, startSat - 35)];
+  /* Systematic search: vary hue, saturation, AND starting lightness */
+  var satOffsets = [0, 15, -15, 30, -30, 40, -40];
+  var lightOffsets = [0, 8, -8, 15, -15];
   var bestCandidate = null, bestScore = 0;
   for (var offset = 3; offset < 360; offset += 3) {
-    for (var si = 0; si < satOptions.length; si++) {
-      var sat = satOptions[si];
-      var candidates = [(startHue + offset) % 360, (startHue - offset + 360) % 360];
-      for (var ci = 0; ci < candidates.length; ci++) {
-        var h = candidates[ci];
-        if (minHueDist(h, existingHues) < MIN_HUE) continue;
-        var p = makePair(h, sat, darkBg);
-        if (isDistinctEnough(p.lightHex, p.darkHex, existingPairs, MIN_RGB)) {
-          return { hue: h, sat: sat, pair: p };
+    for (var si = 0; si < satOffsets.length; si++) {
+      var sat = Math.min(90, Math.max(25, startSat + satOffsets[si]));
+      for (var li = 0; li < lightOffsets.length; li++) {
+        var startL = Math.min(65, Math.max(30, 50 + lightOffsets[li]));
+        var candidates = [(startHue + offset) % 360, (startHue - offset + 360) % 360];
+        for (var ci = 0; ci < candidates.length; ci++) {
+          var h = candidates[ci];
+          if (minHueDist(h, existingHues) < MIN_HUE) continue;
+          /* Build pair with custom starting lightness */
+          var lHex = adjustForContrast(hsl2hex(h, sat, startL), "#ffffff", 4.5);
+          var dHex = adjustForContrast(hsl2hex(h, sat, startL), darkBg || "#121212", 4.5);
+          var p = { lightHex: lHex, darkHex: dHex, hue: h, sat: sat };
+          if (isDistinctEnough(p.lightHex, p.darkHex, existingPairs)) {
+            return { hue: h, sat: sat, pair: p };
+          }
+          /* Track best-so-far by minimum Delta E across all pairs */
+          var worstDE = Infinity;
+          for (var k = 0; k < existingPairs.length; k++) {
+            var dL = deltaE(p.lightHex, existingPairs[k].lightHex);
+            var dD = deltaE(p.darkHex, existingPairs[k].darkHex);
+            var worst = Math.min(dL, dD);
+            if (worst < worstDE) worstDE = worst;
+          }
+          if (worstDE > bestScore) { bestScore = worstDE; bestCandidate = { hue: h, sat: sat, pair: p }; }
         }
-        /* Track best-so-far in case we can't meet full threshold */
-        var score = 0;
-        for (var k = 0; k < existingPairs.length; k++) {
-          score += colorDist(p.lightHex, existingPairs[k].lightHex);
-          score += colorDist(p.darkHex, existingPairs[k].darkHex);
-        }
-        if (score > bestScore) { bestScore = score; bestCandidate = { hue: h, sat: sat, pair: p }; }
       }
     }
   }
-  /* Fallback: use best scoring candidate we found */
   if (bestCandidate) return bestCandidate;
   var fp = makePair(startHue, startSat, darkBg);
   return { hue: startHue, sat: startSat, pair: fp };
@@ -154,6 +187,31 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
 
     return {id:i, hue:hue, sat:pair.sat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:swapped?"~"+swapped:base.label, swapped:swapped};
   });
+
+  /* POST-GENERATION VERIFICATION: re-roll any color that's too close to a neighbor */
+  for (var pass = 0; pass < 5; pass++) {
+    var worstIdx = -1, worstDE = Infinity;
+    for (var ai = 0; ai < cat.length; ai++) {
+      for (var bi = ai + 1; bi < cat.length; bi++) {
+        var dL = deltaE(cat[ai].lightHex, cat[bi].lightHex);
+        var dD = deltaE(cat[ai].darkHex, cat[bi].darkHex);
+        var worst = Math.min(dL, dD);
+        if (worst < MIN_DE && worst < worstDE) {
+          worstDE = worst;
+          /* Re-roll the one that was assigned later (higher index) */
+          worstIdx = bi;
+        }
+      }
+    }
+    if (worstIdx < 0) break; /* all pairs pass */
+    /* Re-roll the worst offender */
+    var others = []; var otherH = [];
+    for (var ri = 0; ri < cat.length; ri++) {
+      if (ri !== worstIdx) { others.push({ lightHex: cat[ri].lightHex, darkHex: cat[ri].darkHex }); otherH.push(cat[ri].hue); }
+    }
+    var fix = findDistinctColor(cat[worstIdx].hue, cat[worstIdx].sat, others, otherH, darkBg);
+    cat[worstIdx] = { id: cat[worstIdx].id, hue: fix.hue, sat: fix.sat, lightHex: fix.pair.lightHex, darkHex: fix.pair.darkHex, label: "H" + Math.round(fix.hue) + "\u00B0", swapped: null };
+  }
 
   var sem = SEM_BASES.map(function(base,i) { var pair=makePair(base.hue,base.sat,darkBg); return {id:i,hue:base.hue,sat:pair.sat,lightHex:pair.lightHex,darkHex:pair.darkHex,label:base.label}; });
   var deemBases = DEEM_OPT[optIdx] || DEEM_OPT[0];
@@ -579,14 +637,19 @@ export default function App() {
       /* Find a new distinct color */
       var s=slots[idx];
       var best=null, bestDist=0;
-      for(var attempt=0;attempt<40;attempt++){
-        var candidate=(s.hue+30+Math.floor(Math.random()*120))%360;
-        if(minHueDist(candidate,otherHues)<28) continue;
-        var satOpt=Math.min(90,Math.max(35,s.sat+Math.floor(Math.random()*20)-10));
-        var p=makePair(candidate,satOpt,darkStroke);
-        if(isDistinctEnough(p.lightHex,p.darkHex,otherPairs,75)){best={hue:candidate,sat:satOpt,pair:p};break;}
-        var d=0;for(var k=0;k<otherPairs.length;k++){d+=colorDist(p.lightHex,otherPairs[k].lightHex)+colorDist(p.darkHex,otherPairs[k].darkHex);}
-        if(d>bestDist){bestDist=d;best={hue:candidate,sat:satOpt,pair:p};}
+      for(var attempt=0;attempt<60;attempt++){
+        var candidate=(s.hue+25+Math.floor(Math.random()*130))%360;
+        if(minHueDist(candidate,otherHues)<25) continue;
+        var satOpt=Math.min(90,Math.max(25,s.sat+Math.floor(Math.random()*30)-15));
+        var startL=Math.min(65,Math.max(30,50+Math.floor(Math.random()*20)-10));
+        var lHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),"#ffffff",4.5);
+        var dHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),darkStroke,4.5);
+        var p={lightHex:lHex,darkHex:dHex,hue:candidate,sat:satOpt};
+        if(isDistinctEnough(p.lightHex,p.darkHex,otherPairs)){best={hue:candidate,sat:satOpt,pair:p};break;}
+        /* Track best by worst-case Delta E */
+        var worstDE=Infinity;
+        for(var k=0;k<otherPairs.length;k++){var dL=deltaE(p.lightHex,otherPairs[k].lightHex);var dD=deltaE(p.darkHex,otherPairs[k].darkHex);var w=Math.min(dL,dD);if(w<worstDE)worstDE=w;}
+        if(worstDE>bestDist){bestDist=worstDE;best={hue:candidate,sat:satOpt,pair:p};}
       }
       if(!best){best={hue:(s.hue+60)%360,sat:s.sat,pair:makePair((s.hue+60)%360,s.sat,darkStroke)};}
       /* ONLY modify this one slot */
@@ -600,6 +663,19 @@ export default function App() {
   },[darkStroke]);
 
   /* Light shift: only changes ONE slot's saturation */
+  /* Tone variations: cycle through sat + lightness combos for more variety */
+  var TONE_STEPS = [
+    {ds:0,dl:0},    /* original */
+    {ds:12,dl:5},   /* slightly more saturated, lighter */
+    {ds:-15,dl:-5},  /* desaturated, darker */
+    {ds:25,dl:0},   /* vivid */
+    {ds:-8,dl:10},   /* muted, lighter */
+    {ds:15,dl:-10},  /* saturated, darker */
+    {ds:-25,dl:8},   /* very muted, lighter */
+    {ds:30,dl:-8},   /* very vivid, darker */
+    {ds:-12,dl:-12}, /* muted, much darker */
+    {ds:8,dl:15},    /* slightly vivid, much lighter */
+  ];
   var lightShift=useCallback(function(oi,type,sid){
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
@@ -609,10 +685,15 @@ export default function App() {
       for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
       var s=slots[idx];
-      var newSat=((s.sat+15-30)%60)+30;
-      var pair=makePair(s.hue,newSat,darkStroke);
-      /* ONLY modify this one slot */
-      slots[idx]={id:s.id, hue:s.hue, sat:newSat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:s.label, swapped:s.swapped};
+      /* Track which step we're on via a hidden counter */
+      var step=((s._toneStep||0)+1)%TONE_STEPS.length;
+      var t=TONE_STEPS[step];
+      var baseSat=s._baseSat!=null?s._baseSat:s.sat;
+      var newSat=Math.min(90,Math.max(25,baseSat+t.ds));
+      var startL=Math.min(70,Math.max(25,50+t.dl));
+      var lightHex=adjustForContrast(hsl2hex(s.hue,newSat,startL),"#ffffff",4.5);
+      var darkHex=adjustForContrast(hsl2hex(s.hue,newSat,startL),darkStroke,4.5);
+      slots[idx]={id:s.id, hue:s.hue, sat:newSat, lightHex:lightHex, darkHex:darkHex, label:s.label, swapped:s.swapped, _toneStep:step, _baseSat:baseSat};
       if(type==="categorical"){
         next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
       }
