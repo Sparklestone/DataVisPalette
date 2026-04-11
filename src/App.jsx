@@ -81,7 +81,7 @@ function minDeltaE(hex, others) {
   return minD;
 }
 
-var MIN_DE = 22; /* minimum Delta E for "clearly different" */
+var MIN_DE = 28; /* minimum Delta E for "clearly different" — 28+ ensures no ambiguity */
 
 /* Check if a candidate color is distinct enough from all existing colors */
 function isDistinctEnough(candidateL, candidateD, existingPairs) {
@@ -156,23 +156,52 @@ var DEEM_OPT = [
 function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
   var baseHues = OPT_HUES[optIdx] || OPT_HUES[0];
   var seed = reworkSeed || 0;
-  var usedBrandIdxs = {}; /* track which brand colors are already assigned */
-  var assignedHues = []; /* track assigned hues for distance check */
-  var assignedPairs = []; /* track actual rendered colors for perceptual check */
+
+  /* STEP 1: Pre-select the most perceptually distinct brand colors (max 4) */
+  var usableBrand = [];
+  if (brandColors.length > 0) {
+    /* Filter to saturated colors only */
+    var saturated = [];
+    for (var bi = 0; bi < brandColors.length; bi++) {
+      var bHsl = hex2hsl(brandColors[bi].hex);
+      if (bHsl.s > 20 && bHsl.l > 10 && bHsl.l < 85) saturated.push({ idx: bi, hex: brandColors[bi].hex, hue: bHsl.h, sat: bHsl.s, name: brandColors[bi].name });
+    }
+    /* Greedily pick the most distinct ones */
+    if (saturated.length > 0) {
+      usableBrand.push(saturated[0]);
+      for (var si = 1; si < saturated.length && usableBrand.length < 4; si++) {
+        var distinct = true;
+        for (var ui = 0; ui < usableBrand.length; ui++) {
+          /* Check both hue distance AND perceptual distance of the raw brand colors */
+          if (hueDist(saturated[si].hue, usableBrand[ui].hue) < 40) { distinct = false; break; }
+          if (deltaE(saturated[si].hex, usableBrand[ui].hex) < 30) { distinct = false; break; }
+        }
+        if (distinct) usableBrand.push(saturated[si]);
+      }
+    }
+  }
+
+  /* STEP 2: Generate categorical colors */
+  var assignedHues = [];
+  var assignedPairs = [];
+  var usedBrandIdxs = {};
 
   var cat = baseHues.map(function(base, i) {
-    var hue = (base.hue + seed * 17) % 360; /* rework shifts all hues */
+    var hue = (base.hue + seed * 17) % 360;
     var sat = base.sat;
     var swapped = null;
 
-    /* Try to match a brand color, but only if not already used */
-    for (var j = 0; j < brandColors.length; j++) {
+    /* Try to match a pre-selected brand color */
+    for (var j = 0; j < usableBrand.length; j++) {
       if (usedBrandIdxs[j]) continue;
-      var bh = hex2hsl(brandColors[j].hex);
-      if (bh.s > 15 && hueDist(hue, bh.h) < 35) {
-        hue = bh.h; sat = bh.s; swapped = brandColors[j].name;
-        usedBrandIdxs[j] = true;
-        break;
+      if (hueDist(hue, usableBrand[j].hue) < 35) {
+        /* Check if this brand color would be distinct from already assigned */
+        var testPair = makePair(usableBrand[j].hue, usableBrand[j].sat, darkBg);
+        if (isDistinctEnough(testPair.lightHex, testPair.darkHex, assignedPairs)) {
+          hue = usableBrand[j].hue; sat = usableBrand[j].sat; swapped = usableBrand[j].name;
+          usedBrandIdxs[j] = true;
+          break;
+        }
       }
     }
 
@@ -188,23 +217,21 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
     return {id:i, hue:hue, sat:pair.sat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:swapped?"~"+swapped:base.label, swapped:swapped};
   });
 
-  /* POST-GENERATION VERIFICATION: re-roll any color that's too close to a neighbor */
-  for (var pass = 0; pass < 5; pass++) {
+  /* STEP 3: POST-GENERATION VERIFICATION — re-roll any color too close to a neighbor */
+  for (var pass = 0; pass < 8; pass++) {
     var worstIdx = -1, worstDE = Infinity;
     for (var ai = 0; ai < cat.length; ai++) {
-      for (var bi = ai + 1; bi < cat.length; bi++) {
-        var dL = deltaE(cat[ai].lightHex, cat[bi].lightHex);
-        var dD = deltaE(cat[ai].darkHex, cat[bi].darkHex);
+      for (var bi2 = ai + 1; bi2 < cat.length; bi2++) {
+        var dL = deltaE(cat[ai].lightHex, cat[bi2].lightHex);
+        var dD = deltaE(cat[ai].darkHex, cat[bi2].darkHex);
         var worst = Math.min(dL, dD);
         if (worst < MIN_DE && worst < worstDE) {
           worstDE = worst;
-          /* Re-roll the one that was assigned later (higher index) */
-          worstIdx = bi;
+          worstIdx = bi2;
         }
       }
     }
-    if (worstIdx < 0) break; /* all pairs pass */
-    /* Re-roll the worst offender */
+    if (worstIdx < 0) break;
     var others = []; var otherH = [];
     for (var ri = 0; ri < cat.length; ri++) {
       if (ri !== worstIdx) { others.push({ lightHex: cat[ri].lightHex, darkHex: cat[ri].darkHex }); otherH.push(cat[ri].hue); }
