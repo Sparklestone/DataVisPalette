@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import PptxGenJS from "pptxgenjs";
+import JSZip from "jszip";
 
 /* ═══ PANTONE DB ═══ */
 var PDB = [
@@ -541,96 +541,90 @@ export default function App() {
 
   function downloadPptx() {
     if (!cur) return;
-    var pptx = new PptxGenJS();
-    pptx.layout = "LAYOUT_WIDE";
+    show("Generating PPTX...");
     var brandName = activeBrand ? brands[activeBrand].name : "Generic";
-    pptx.title = brandName + " Data Vis Palette";
-    var hx = function(hex) { return hex.replace("#",""); };
-    var dsHx = hx(darkStroke);
+    var hx = function(hex) { return hex.replace("#","").toUpperCase(); };
 
-    function addSwatchSlide(title, slots, isDk, bgColor) {
-      var slide = pptx.addSlide();
-      if (bgColor) slide.background = { color: hx(bgColor) };
-      var txtColor = bgColor && bgColor !== "#ffffff" ? "FFFFFF" : "222222";
-      slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 24, fontFace: "Arial", color: txtColor, bold: true });
+    /* Template color map — these are the HAP colors in the template file */
+    var TMPL_L_CAT = ["0D0DF2","078465","CF480B","D92641","AB49D1","0F8835","897614","DB0C99","3974C6"];
+    var TMPL_D_CAT = ["7070F7","0DF2BA","F2540D","E05065","BD70DB","19E65A","DFBF20","F20DA9","5185CD"];
+    var TMPL_L_SEM = ["1D8640","A26B0D","DB2424"];
+    var TMPL_D_SEM = ["2DD264","EC9C13","E24E4E"];
+    var TMPL_L_DEEM = ["6B7584","6D7680","565B61"];
+    var TMPL_D_DEEM = ["818A98","9FA5AD","BBBFC3"];
+    var TMPL_DARK_BG = "000064";
+    /* Also colors used once in charts/misc */
+    var TMPL_EXTRAS = ["F9550B","DB0196","C35701","7D50AB","1464B8","01A47C","000063","D3D3D3","BBBBBB","A5A5A5","585858"];
 
-      var cols = Math.min(slots.length, 9);
-      var swW = 1.2, swH = 0.8, gap = 0.12, startX = 0.5, startY = 1.1;
-      slots.forEach(function(s, i) {
-        var col = i % cols;
-        var row = Math.floor(i / cols);
-        var x = startX + col * (swW + gap);
-        var y = startY + row * (swH + 0.45);
-        var hex = isDk ? s.darkHex : s.lightHex;
-        slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, { x: x, y: y, w: swW, h: swH, fill: { color: hx(hex) }, rectRadius: 0.08 });
-        slide.addText(hex.toUpperCase(), { x: x, y: y + swH + 0.02, w: swW, h: 0.25, fontSize: 8, fontFace: "Courier New", color: txtColor, align: "center" });
-      });
+    /* Build replacement map: template color → new color */
+    var map = {};
+    for (var ci = 0; ci < 9; ci++) {
+      map[TMPL_L_CAT[ci]] = hx(cur.categorical[ci].lightHex);
+      map[TMPL_D_CAT[ci]] = hx(cur.categorical[ci].darkHex);
+    }
+    for (var si = 0; si < 3; si++) {
+      map[TMPL_L_SEM[si]] = hx(cur.semantic[si].lightHex);
+      map[TMPL_D_SEM[si]] = hx(cur.semantic[si].darkHex);
+      map[TMPL_L_DEEM[si]] = hx(cur.deemphasis[si].lightHex);
+      map[TMPL_D_DEEM[si]] = hx(cur.deemphasis[si].darkHex);
+    }
+    map[TMPL_DARK_BG] = hx(darkStroke);
+    /* Map the extra "000063" too (off by one from dark bg) */
+    map["000063"] = hx(darkStroke);
+
+    /* Sort keys by length descending to avoid partial matches */
+    var sortedKeys = Object.keys(map).sort(function(a,b) { return b.length - a.length; });
+
+    function replaceColors(xml) {
+      /* Replace brand name */
+      xml = xml.split("HAP").join(brandName);
+      /* Replace hex text labels like #0D0DF2 shown on slides */
+      for (var ki = 0; ki < sortedKeys.length; ki++) {
+        var old = sortedKeys[ki];
+        var nw = map[old];
+        /* Replace in srgbClr val attributes (shape fills, chart colors) */
+        xml = xml.split('val="' + old + '"').join('val="' + nw + '"');
+        xml = xml.split('val="' + old.toLowerCase() + '"').join('val="' + nw + '"');
+        /* Replace hex text labels shown on slides (e.g. #0D0DF2) */
+        xml = xml.split("#" + old).join("#" + nw);
+        xml = xml.split("#" + old.toLowerCase()).join("#" + nw);
+      }
+      return xml;
     }
 
-    function addChartSlide(title, slots, isDk, bgColor) {
-      var slide = pptx.addSlide();
-      if (bgColor) slide.background = { color: hx(bgColor) };
-      var txtColor = bgColor && bgColor !== "#ffffff" ? "FFFFFF" : "222222";
-      slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 24, fontFace: "Arial", color: txtColor, bold: true });
-
-      /* Bar chart */
-      var barData = [{ name: "Values", labels: [], values: [], color: [] }];
-      var chartSlots = slots.slice(0, 9);
-      chartSlots.forEach(function(s, i) {
-        var hex = isDk ? s.darkHex : s.lightHex;
-        barData[0].labels.push("C" + (i + 1));
-        barData[0].values.push([82, 54, 71, 38, 63, 47, 29, 55, 45][i] || 40);
-        barData[0].color.push(hx(hex));
+    fetch("/template.pptx").then(function(res) {
+      return res.arrayBuffer();
+    }).then(function(buf) {
+      return JSZip.loadAsync(buf);
+    }).then(function(zip) {
+      var xmlFiles = [];
+      zip.forEach(function(path, entry) {
+        if (!entry.dir && (path.endsWith(".xml") || path.endsWith(".rels"))) {
+          xmlFiles.push(path);
+        }
       });
-      slide.addChart(pptx.charts.BAR, barData, { x: 0.5, y: 1.2, w: 5.5, h: 3.5, showLegend: false, showValue: false, catAxisHidden: true, valAxisHidden: true, plotBorder: { pt: 0 }, chartColors: barData[0].color });
-
-      /* Donut chart */
-      var pieData = [{ name: "Share", labels: [], values: [], color: [] }];
-      var pieVals = [30, 22, 18, 12, 10, 8, 5, 4, 3];
-      chartSlots.forEach(function(s, i) {
-        var hex = isDk ? s.darkHex : s.lightHex;
-        pieData[0].labels.push("C" + (i + 1));
-        pieData[0].values.push(pieVals[i] || 3);
-        pieData[0].color.push(hx(hex));
+      /* Process all XML files */
+      var promises = xmlFiles.map(function(path) {
+        return zip.file(path).async("string").then(function(content) {
+          var updated = replaceColors(content);
+          zip.file(path, updated);
+        });
       });
-      slide.addChart(pptx.charts.DOUGHNUT, pieData, { x: 7, y: 1.2, w: 3.5, h: 3.5, showLegend: false, showTitle: false, holeSize: 50, chartColors: pieData[0].color });
-    }
-
-    function addSemanticSlide(title, slots, isDk, bgColor) {
-      var slide = pptx.addSlide();
-      if (bgColor) slide.background = { color: hx(bgColor) };
-      var txtColor = bgColor && bgColor !== "#ffffff" ? "FFFFFF" : "222222";
-      slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 24, fontFace: "Arial", color: txtColor, bold: true });
-
-      slots.forEach(function(s, i) {
-        var hex = isDk ? s.darkHex : s.lightHex;
-        var y = 1.2 + i * 1.0;
-        slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, { x: 0.5, y: y, w: 2.5, h: 0.7, fill: { color: hx(hex) }, rectRadius: 0.06 });
-        slide.addText(s.label, { x: 3.2, y: y, w: 3, h: 0.7, fontSize: 18, fontFace: "Arial", color: hx(hex), bold: true, valign: "middle" });
-        slide.addText(hex.toUpperCase(), { x: 6.2, y: y, w: 2, h: 0.7, fontSize: 12, fontFace: "Courier New", color: txtColor, valign: "middle" });
-      });
-    }
-
-    /* L slides */
-    addSwatchSlide(brandName + " · Categorical · L", cur.categorical, false, "#ffffff");
-    addChartSlide(brandName + " · Categorical Charts · L on White", cur.categorical, false, "#ffffff");
-    addChartSlide(brandName + " · Categorical Charts · L on Dark", cur.categorical, false, darkStroke);
-    addSwatchSlide(brandName + " · Spectrum · L", cur.spectrum, false, "#ffffff");
-    addSemanticSlide(brandName + " · Semantic · L on White", cur.semantic, false, "#ffffff");
-    addSemanticSlide(brandName + " · Semantic · L on Dark", cur.semantic, false, darkStroke);
-    addSwatchSlide(brandName + " · Deemphasis · L", cur.deemphasis, false, "#ffffff");
-
-    /* D slides */
-    addSwatchSlide(brandName + " · Categorical · D", cur.categorical, true, darkStroke);
-    addChartSlide(brandName + " · Categorical Charts · D on White", cur.categorical, true, "#ffffff");
-    addChartSlide(brandName + " · Categorical Charts · D on Dark", cur.categorical, true, darkStroke);
-    addSwatchSlide(brandName + " · Spectrum · D", cur.spectrum, true, darkStroke);
-    addSemanticSlide(brandName + " · Semantic · D on White", cur.semantic, true, "#ffffff");
-    addSemanticSlide(brandName + " · Semantic · D on Dark", cur.semantic, true, darkStroke);
-    addSwatchSlide(brandName + " · Deemphasis · D", cur.deemphasis, true, darkStroke);
-
-    pptx.writeFile({ fileName: brandName + "_DataVisPalette_Opt" + (activeOpt + 1) + ".pptx" });
-    show("Downloading PPTX...");
+      return Promise.all(promises).then(function() { return zip; });
+    }).then(function(zip) {
+      return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+    }).then(function(blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = brandName + "_DataVisPalette_Opt" + (activeOpt + 1) + ".pptx";
+      a.click();
+      URL.revokeObjectURL(url);
+      show("PPTX downloaded!");
+    }).catch(function(err) {
+      console.error("PPTX generation error:", err);
+      show("Error generating PPTX");
+    });
   }
 
   var handleUpload=useCallback(function(file){
