@@ -613,13 +613,6 @@ export default function App() {
     var brandName = activeBrand ? brands[activeBrand].name : "Generic";
     var hx = function(hex) { return hex.replace("#","").toUpperCase(); };
 
-    /* All template palette hex values */
-    var ALL_TMPL = {};
-    ["772ED1","C426D9","0D54F2","198617","CF480B","0D0DF2","167D99","917107",
-     "9E6ADE","CC45DE","477DF5","29D926","F2540D","7070F7","20B6DF","F4C325",
-     "1D8640","A26B0D","DB2424","2DD264","EC9C13","E24E4E",
-     "6B7584","6D7680","565B61","818A98","9FA5AD","BBBFC3"].forEach(function(c){ALL_TMPL[c]=true;});
-
     var NLC = cur.categorical.map(function(s){return hx(s.lightHex);});
     var NDC = cur.categorical.map(function(s){return hx(s.darkHex);});
     var NLS = cur.spectrum.map(function(s){return hx(s.lightHex);});
@@ -630,80 +623,74 @@ export default function App() {
     var NDDEEM = cur.deemphasis.map(function(s){return hx(s.darkHex);});
     var NDARK = hx(darkStroke);
 
-    /* Per-slide text label replacement sequences (from template analysis) */
+    /* Per-slide positional replacement sequences (structure from template analysis):
+       S1 (L slide): L cat 9, L spec 9, L deem 3, L sem 3, L deem 3, L sem 3 = 30
+       S2 (D slide): D cat 9, D spec 9, D deem 3, D sem 3, D deem 3, D sem 3 = 30
+       S3 (compare): L deem 3, L sem 3, D deem 3, D sem 3,
+                     D cat 9, D spec 9, L cat 9, L spec 9,
+                     D deem 3, D sem 3, L deem 3, L sem 3 = 60 */
     var S1 = [].concat(NLC, NLS, NLDEEM, NLSEM, NLDEEM, NLSEM);
     var S2 = [].concat(NDC, NDS, NDDEEM, NDSEM, NDDEEM, NDSEM);
     var S3 = [].concat(NLDEEM, NLSEM, NDDEEM, NDSEM, NDC, NDS, NLC, NLS, NDDEEM, NDSEM, NLDEEM, NLSEM);
 
+    /* Repair corrupted 7-char hex values from previous code bug */
+    function repairXml(xml) {
+      return xml.replace(/val="([A-F0-9]{7})\//g, function(match, hex7) {
+        return 'val="' + hex7.substring(1) + '"/';
+      });
+    }
+
+    /* Template L/D palette colors (after repair) → new palette positions */
+    var L_MAP = {"CF480B":0,"83770E":1,"498215":2,"285D2F":3,"468078":4,"1D79CA":5,"180DF2":6,"DB0C99":7,"A74DCB":8};
+    var D_MAP = {"F2540D":0,"E6D119":1,"7CDB24":2,"40954B":3,"9CC9C3":4,"2086DF":5,"7670F7":6,"F20DA9":7,"C181DA":8};
+    /* Semantic/deemphasis (unique, can do global replace) */
+    var SEM_L = {"1D8640":0,"A26B0D":1,"DB2424":2};
+    var SEM_D = {"2DD264":0,"EC9C13":1,"E24E4E":2};
+    var DEEM_L = {"6B7584":0,"6D7680":1,"565B61":2};
+    var DEEM_D = {"818A98":0,"9FA5AD":1,"BBBFC3":2};
+
     function processSlide(xml, slideMap) {
-      var textEntries = [];
-      var textRe = /#([A-F0-9]{6})/g;
-      var m;
-      while ((m = textRe.exec(xml)) !== null) {
-        if (ALL_TMPL[m[1]] && textEntries.length < slideMap.length) {
-          textEntries.push({pos: m.index + 1, len: 6, oldHex: m[1], newHex: slideMap[textEntries.length]});
-        }
+      xml = repairXml(xml);
+      /* Replace #XXXXXX text labels positionally */
+      var replacements = [];
+      var textRe = /#([A-F0-9]{6})(?=[^A-F0-9])/g;
+      var m, idx = 0;
+      while ((m = textRe.exec(xml)) !== null && idx < slideMap.length) {
+        replacements.push({pos: m.index + 1, len: 6, val: slideMap[idx]});
+        idx++;
       }
-      var fillEntries = [];
-      var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
-      while ((m = fillRe.exec(xml)) !== null) {
-        if (ALL_TMPL[m[1]]) {
-          var nearest = null, nearestDist = Infinity;
-          for (var t = 0; t < textEntries.length; t++) {
-            if (textEntries[t].oldHex === m[1]) {
-              var dist = Math.abs(m.index - textEntries[t].pos);
-              if (dist < nearestDist) { nearestDist = dist; nearest = textEntries[t]; }
-            }
-          }
-          if (nearest) { fillEntries.push({pos: m.index + 14, len: 6, newHex: nearest.newHex}); }
-        }
+      for (var r = replacements.length - 1; r >= 0; r--) {
+        var rp = replacements[r];
+        xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + rp.len);
       }
-      var allR = textEntries.concat(fillEntries);
-      allR.sort(function(a, b) { return b.pos - a.pos; });
-      for (var r = 0; r < allR.length; r++) {
-        var rp = allR[r];
-        xml = xml.substring(0, rp.pos) + rp.newHex + xml.substring(rp.pos + rp.len);
-      }
+      /* Replace srgbClr fills for palette colors (now properly 6-char after repair) */
+      for (var lk in L_MAP) { xml = xml.split('val="' + lk + '"').join('val="' + NLC[L_MAP[lk]] + '"'); }
+      for (var dk in D_MAP) { xml = xml.split('val="' + dk + '"').join('val="' + NDC[D_MAP[dk]] + '"'); }
+      for (var sk in SEM_L) { xml = xml.split('val="' + sk + '"').join('val="' + NLSEM[SEM_L[sk]] + '"'); }
+      for (var sdk in SEM_D) { xml = xml.split('val="' + sdk + '"').join('val="' + NDSEM[SEM_D[sdk]] + '"'); }
+      for (var dlk in DEEM_L) { xml = xml.split('val="' + dlk + '"').join('val="' + NLDEEM[DEEM_L[dlk]] + '"'); }
+      for (var ddk in DEEM_D) { xml = xml.split('val="' + ddk + '"').join('val="' + NDDEEM[DEEM_D[ddk]] + '"'); }
+      /* Dark bg */
       xml = xml.split('val="000064"').join('val="' + NDARK + '"');
       xml = xml.split('val="000063"').join('val="' + NDARK + '"');
+      /* Text labels */
       xml = xml.split("HAP").join(brandName);
       xml = xml.split("Option 1").join("Option " + (activeOpt + 1));
-      xml = xml.split("Option 2").join("Option " + (activeOpt + 1));
-      xml = xml.split("White outlines").join("L · White Stroke");
-      xml = xml.split("Dark outlines").join("D · Dark Stroke");
-      xml = xml.split("Darker colors with white").join("L colors with white");
-      xml = xml.split("Lighter colors with Dark").join("D colors with dark");
-      xml = xml.split("Option comparison").join(brandName + " · Opt " + (activeOpt + 1));
       return xml;
     }
 
-    var L_TMPL = {"772ED1":0,"C426D9":1,"198617":3,"CF480B":4,"0D0DF2":5,"167D99":6,"917107":7,"0D54F2":2};
-    var D_TMPL = {"9E6ADE":0,"CC45DE":1,"477DF5":2,"29D926":3,"F2540D":4,"7070F7":5,"20B6DF":6,"F4C325":7};
-
     function processChart(xml) {
-      var isD = false;
-      ["9E6ADE","CC45DE","477DF5","29D926","F2540D","7070F7","20B6DF","F4C325"].forEach(function(c){if(xml.indexOf('val="'+c+'"')>=0) isD=true;});
-      var tmplMap = isD ? D_TMPL : L_TMPL;
-      var newCat = isD ? NDC : NLC;
-      var replacements = [];
-      var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
-      var m2;
-      while ((m2 = fillRe.exec(xml)) !== null) {
-        if (m2[1] === "000064" || m2[1] === "000063") {
-          replacements.push({pos: m2.index + 14, len: 6, val: NDARK});
-        } else if (tmplMap[m2[1]] !== undefined) {
-          replacements.push({pos: m2.index + 14, len: 6, val: newCat[tmplMap[m2[1]]]});
-        }
-      }
-      replacements.sort(function(a,b){return b.pos-a.pos;});
-      for (var ri = 0; ri < replacements.length; ri++) {
-        var rp = replacements[ri];
-        xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + rp.len);
-      }
+      xml = repairXml(xml);
+      /* Map repaired palette colors to new values */
+      for (var lk2 in L_MAP) { xml = xml.split('val="' + lk2 + '"').join('val="' + NLC[L_MAP[lk2]] + '"'); }
+      for (var dk2 in D_MAP) { xml = xml.split('val="' + dk2 + '"').join('val="' + NDC[D_MAP[dk2]] + '"'); }
+      xml = xml.split('val="000064"').join('val="' + NDARK + '"');
+      xml = xml.split('val="000063"').join('val="' + NDARK + '"');
       return xml;
     }
 
     function processOther(xml) {
+      xml = repairXml(xml);
       xml = xml.split('val="000064"').join('val="' + NDARK + '"');
       xml = xml.split('val="000063"').join('val="' + NDARK + '"');
       xml = xml.split("HAP").join(brandName);
