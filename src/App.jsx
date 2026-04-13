@@ -191,122 +191,201 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
 /* ═══ OPTION 1 & 2: Brand-first palette ═══ */
 function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
   var seed = reworkSeed || 0;
-  var skipN = optIdx === 1 ? 2 : 0; /* Opt 2 skips first 2 (primary brand colors) */
+  var skipN = optIdx === 1 ? 2 : 0;
 
-  /* ── Phase 1: Separate grays from chromatic ── */
+  /* Phase 1: Separate grays from chromatic */
   var grays = [], chromatic = [];
   for (var i = skipN; i < brandColors.length; i++) {
     var bh = hex2hsl(brandColors[i].hex);
-    if (bh.s < 15 && bh.l > 15 && bh.l < 85) { grays.push(brandColors[i]); }
-    else if (bh.s >= 10 && bh.l > 5 && bh.l < 95) { chromatic.push({hex:brandColors[i].hex, name:brandColors[i].name, hue:bh.h, sat:bh.s, l:bh.l}); }
+    if (bh.s < 15 && bh.l > 15 && bh.l < 95) { grays.push(brandColors[i]); }
+    else if (bh.s >= 10 && bh.l > 5 && bh.l < 95) { chromatic.push({hex:brandColors[i].hex, name:brandColors[i].name, hue:bh.h, sat:bh.s, l:bh.l, origIdx:i}); }
   }
 
-  /* ── Phase 2: Classify brand colors by AA compliance ── */
-  var slots = [];
-  var dBrandPool = []; /* brand colors that pass on dark bg — for counterpart pairing */
+  /* Phase 2: Classify by AA compliance (slightly relaxed threshold for borderline brand colors) */
+  var lPool = [], dPool = [];
   for (var ci = 0; ci < chromatic.length; ci++) {
     var c = chromatic[ci];
     var crW = CR(c.hex, "#ffffff"), crD = CR(c.hex, darkBg);
-    var lH, dH, sourceL = false, sourceD = false;
-    if (crW >= 4.5 && crD >= 4.5) {
-      /* Passes both — use as L, track as D candidate too */
-      lH = c.hex; dH = adjustForContrast(c.hex, darkBg, 4.5); sourceL = true;
-      dBrandPool.push({hex: c.hex, hue: c.hue, name: c.name});
-    } else if (crW >= 4.5) {
-      lH = c.hex; dH = adjustForContrast(c.hex, darkBg, 4.5); sourceL = true;
-    } else if (crD >= 4.5) {
-      dH = c.hex; lH = adjustForContrast(c.hex, "#ffffff", 4.5); sourceD = true;
-      dBrandPool.push({hex: c.hex, hue: c.hue, name: c.name});
-    } else {
-      /* Fails both — adjust to whichever contrast is closer */
-      if (crW > crD) {
-        lH = adjustForContrast(c.hex, "#ffffff", 4.5); dH = adjustForContrast(lH, darkBg, 4.5); sourceL = true;
-      } else {
-        dH = adjustForContrast(c.hex, darkBg, 4.5); lH = adjustForContrast(dH, "#ffffff", 4.5); sourceD = true;
-        dBrandPool.push({hex: dH, hue: c.hue, name: c.name});
-      }
+    if (crW >= 4.3) lPool.push({hex:c.hex, name:c.name, hue:c.hue, sat:c.sat, origIdx:c.origIdx});
+    if (crD >= 4.3) dPool.push({hex:c.hex, name:c.name, hue:c.hue, sat:c.sat, origIdx:c.origIdx});
+    if (crW < 4.3 && crD < 4.3) {
+      if (crW > crD) { var adjL = adjustForContrast(c.hex, "#ffffff", 4.5); lPool.push({hex:adjL, name:c.name, hue:c.hue, sat:c.sat, origIdx:c.origIdx}); }
+      else { var adjD = adjustForContrast(c.hex, darkBg, 4.5); dPool.push({hex:adjD, name:c.name, hue:c.hue, sat:c.sat, origIdx:c.origIdx}); }
     }
-    slots.push({hue:c.hue, sat:c.sat, lightHex:lH, darkHex:dH, name:c.name, brand:true, sourceL:sourceL, sourceD:sourceD});
   }
 
-  /* ── Phase 3: Pair brand D colors with L slots ── */
-  /* If a slot's auto-generated darkHex is close to a brand D color, use the brand D instead */
-  var usedDPool = {};
-  for (var si = 0; si < slots.length; si++) {
-    if (!slots[si].sourceL) continue; /* only check L-primary slots */
-    for (var di = 0; di < dBrandPool.length; di++) {
-      if (usedDPool[di]) continue;
-      if (dBrandPool[di].hex === slots[si].lightHex) continue; /* same color */
-      if (deltaE(slots[si].darkHex, dBrandPool[di].hex) < 35 && hueDist(slots[si].hue, dBrandPool[di].hue) < 50) {
-        slots[si].darkHex = dBrandPool[di].hex;
-        usedDPool[di] = true;
+  /* Phase 3: Pair L+D brand colors in same hue family */
+  var usedOrig = {};
+  var pairedSlots = [];
+
+  /* First: cross-pool pairing (L candidate with D candidate) */
+  for (var li = 0; li < lPool.length; li++) {
+    if (usedOrig[lPool[li].origIdx]) continue;
+    var bestD = null, bestDist = Infinity;
+    for (var di = 0; di < dPool.length; di++) {
+      if (usedOrig[dPool[di].origIdx]) continue;
+      if (dPool[di].origIdx === lPool[li].origIdx) continue;
+      var hd = hueDist(lPool[li].hue, dPool[di].hue);
+      if (hd < 45 && hd < bestDist) { bestDist = hd; bestD = dPool[di]; }
+    }
+    if (bestD) {
+      pairedSlots.push({hue:lPool[li].hue, sat:lPool[li].sat, lightHex:lPool[li].hex, darkHex:bestD.hex, name:lPool[li].name, brand:true});
+      usedOrig[lPool[li].origIdx] = true;
+      usedOrig[bestD.origIdx] = true;
+    }
+  }
+
+  /* Second: intra-pool pairing — two L-pool colors in same hue family (darker→L, lighter→D) */
+  for (var la = 0; la < lPool.length; la++) {
+    if (usedOrig[lPool[la].origIdx]) continue;
+    var bestMatch = null, bestHD = Infinity;
+    for (var lb = 0; lb < lPool.length; lb++) {
+      if (lb === la || usedOrig[lPool[lb].origIdx]) continue;
+      var ihd = hueDist(lPool[la].hue, lPool[lb].hue);
+      if (ihd < 35) {
+        if (ihd < bestHD - 2 || (ihd <= bestHD + 2 && lPool[lb].sat > (bestMatch ? bestMatch.sat : 0))) {
+          bestHD = ihd; bestMatch = lPool[lb];
+        }
+      }
+    }
+    if (bestMatch) {
+      var lA = hex2hsl(lPool[la].hex).l, lB = hex2hsl(bestMatch.hex).l;
+      var darker = lA < lB ? lPool[la] : bestMatch;
+      var lighter = lA < lB ? bestMatch : lPool[la];
+      pairedSlots.push({hue:darker.hue, sat:darker.sat, lightHex:darker.hex, darkHex:lighter.hex, name:darker.name, brand:true});
+      usedOrig[darker.origIdx] = true;
+      usedOrig[lighter.origIdx] = true;
+    }
+  }
+
+  /* Third: intra-pool pairing — two D-pool colors in same hue family */
+  for (var da = 0; da < dPool.length; da++) {
+    if (usedOrig[dPool[da].origIdx]) continue;
+    var bestDMatch = null, bestDHD = Infinity;
+    for (var db = 0; db < dPool.length; db++) {
+      if (db === da || usedOrig[dPool[db].origIdx]) continue;
+      var dhd = hueDist(dPool[da].hue, dPool[db].hue);
+      if (dhd < 35) {
+        if (dhd < bestDHD - 2 || (dhd <= bestDHD + 2 && dPool[db].sat > (bestDMatch ? bestDMatch.sat : 0))) {
+          bestDHD = dhd; bestDMatch = dPool[db];
+        }
+      }
+    }
+    if (bestDMatch) {
+      var dA = hex2hsl(dPool[da].hex).l, dB = hex2hsl(bestDMatch.hex).l;
+      var dDarker = dA < dB ? dPool[da] : bestDMatch;
+      var dLighter = dA < dB ? bestDMatch : dPool[da];
+      pairedSlots.push({hue:dDarker.hue, sat:dDarker.sat, lightHex:dDarker.hex, darkHex:dLighter.hex, name:dDarker.name, brand:true});
+      usedOrig[dDarker.origIdx] = true;
+      usedOrig[dLighter.origIdx] = true;
+    }
+  }
+
+  /* Remaining L-only: auto-generate D */
+  for (var li2 = 0; li2 < lPool.length; li2++) {
+    if (usedOrig[lPool[li2].origIdx]) continue;
+    pairedSlots.push({hue:lPool[li2].hue, sat:lPool[li2].sat, lightHex:lPool[li2].hex, darkHex:adjustForContrast(lPool[li2].hex, darkBg, 4.5), name:lPool[li2].name, brand:true});
+    usedOrig[lPool[li2].origIdx] = true;
+  }
+
+  /* Remaining D-only: auto-generate L */
+  for (var di2 = 0; di2 < dPool.length; di2++) {
+    if (usedOrig[dPool[di2].origIdx]) continue;
+    pairedSlots.push({hue:dPool[di2].hue, sat:dPool[di2].sat, lightHex:adjustForContrast(dPool[di2].hex, "#ffffff", 4.5), darkHex:dPool[di2].hex, name:dPool[di2].name, brand:true});
+    usedOrig[dPool[di2].origIdx] = true;
+  }
+
+  /* Phase 3b: For slots with auto-generated counterparts, check if unused brand color in same hue family fits */
+  for (var pi = 0; pi < pairedSlots.length; pi++) {
+    var slot = pairedSlots[pi];
+    if (!slot.brand) continue;
+    for (var ui = 0; ui < chromatic.length; ui++) {
+      if (usedOrig[chromatic[ui].origIdx]) continue;
+      if (hueDist(chromatic[ui].hue, slot.hue) > 35) continue;
+      /* Determine which side was auto-generated by checking if hex matches any brand color exactly */
+      var lIsBrand = false, dIsBrand = false;
+      for (var bc = 0; bc < chromatic.length; bc++) {
+        if (chromatic[bc].hex.toLowerCase() === slot.lightHex.toLowerCase()) lIsBrand = true;
+        if (chromatic[bc].hex.toLowerCase() === slot.darkHex.toLowerCase()) dIsBrand = true;
+      }
+      if (lIsBrand && !dIsBrand) {
+        /* L is brand, D was auto — try this unused brand as D */
+        slot.darkHex = chromatic[ui].hex;
+        usedOrig[chromatic[ui].origIdx] = true;
+        break;
+      } else if (dIsBrand && !lIsBrand) {
+        /* D is brand, L was auto — try this unused brand as L */
+        slot.lightHex = chromatic[ui].hex;
+        usedOrig[chromatic[ui].origIdx] = true;
         break;
       }
     }
   }
 
-  /* ── Phase 4: Sort by hue, greedily pick distinct brand colors ── */
-  slots.sort(function(a,b) { return a.hue - b.hue; });
-  /* Apply seed rotation for rework */
-  if (seed > 0 && slots.length > 0) {
-    var off = seed % slots.length;
-    slots = slots.slice(off).concat(slots.slice(0, off));
+  /* Phase 4: Sort by hue, greedily pick distinct */
+  pairedSlots.sort(function(a,b) { return a.hue - b.hue; });
+  if (seed > 0 && pairedSlots.length > 0) {
+    var off = seed % pairedSlots.length;
+    pairedSlots = pairedSlots.slice(off).concat(pairedSlots.slice(0, off));
   }
-
   var selected = [];
-  for (var si2 = 0; si2 < slots.length && selected.length < 9; si2++) {
-    var s = slots[si2], ok = true;
+  for (var si = 0; si < pairedSlots.length && selected.length < 9; si++) {
+    var ps = pairedSlots[si], ok = true;
     for (var ei = 0; ei < selected.length; ei++) {
-      if (hueDist(s.hue, selected[ei].hue) < MIN_HUE_GLOBAL) { ok = false; break; }
-      if (deltaE(s.lightHex, selected[ei].lightHex) < MIN_DE) { ok = false; break; }
-      if (deltaE(s.darkHex, selected[ei].darkHex) < MIN_DE) { ok = false; break; }
+      /* Relaxed thresholds when both are brand colors */
+      var bothBrand = ps.brand && selected[ei].brand;
+      var minHue = bothBrand ? 22 : MIN_HUE_GLOBAL;
+      var minDE = bothBrand ? 20 : MIN_DE;
+      if (hueDist(ps.hue, selected[ei].hue) < minHue) { ok = false; break; }
+      if (deltaE(ps.lightHex, selected[ei].lightHex) < minDE) { ok = false; break; }
+      if (deltaE(ps.darkHex, selected[ei].darkHex) < minDE) { ok = false; break; }
     }
-    if (ok) selected.push(s);
+    if (ok) selected.push(ps);
   }
 
-  /* ── Phase 5: Fill remaining slots by finding largest hue gaps ── */
+  /* Phase 5: Fill gaps — seed offsets the target hue for variety on rework */
   while (selected.length < 9) {
     var usedH = selected.map(function(s){return s.hue;}).sort(function(a,b){return a-b;});
     var maxGap = 0, gapMid = 0;
     for (var gi = 0; gi <= usedH.length; gi++) {
       var lo = gi > 0 ? usedH[gi-1] : usedH[usedH.length-1] - 360;
-      var hi = gi < usedH.length ? usedH[gi] : usedH[0] + 360;
-      var gap = hi - lo;
+      var hi2 = gi < usedH.length ? usedH[gi] : usedH[0] + 360;
+      var gap = hi2 - lo;
       if (gap > maxGap) { maxGap = gap; gapMid = ((lo + gap / 2) % 360 + 360) % 360; }
     }
-    var pairs = selected.map(function(s2){return {lightHex:s2.lightHex, darkHex:s2.darkHex};});
-    var hList = selected.map(function(s2){return s2.hue;});
-    var fill = findDistinctColor(Math.round(gapMid), 65, pairs, hList, darkBg);
-    selected.push({hue:fill.hue, sat:fill.sat, lightHex:fill.pair.lightHex, darkHex:fill.pair.darkHex, name:"H"+Math.round(fill.hue)+"\u00B0", brand:false});
+    /* Seed shifts the target by ±offset within the gap */
+    var seedOffset = seed > 0 ? ((seed * 17) % Math.max(1, Math.floor(maxGap * 0.3))) - Math.floor(maxGap * 0.15) : 0;
+    var targetHue = ((gapMid + seedOffset) % 360 + 360) % 360;
+    var prs = selected.map(function(s2){return {lightHex:s2.lightHex, darkHex:s2.darkHex};});
+    var hLst = selected.map(function(s2){return s2.hue;});
+    var fill = findDistinctColor(Math.round(targetHue), 65, prs, hLst, darkBg);
+    selected.push({hue:fill.hue, sat:fill.sat, lightHex:fill.pair.lightHex, darkHex:fill.pair.darkHex, name:"H"+Math.round(fill.hue)+"°", brand:false});
   }
 
-  /* ── Phase 5b: Verification — only re-roll NON-brand slots ── */
+  /* Phase 5b: Verify — only re-roll non-brand */
   for (var vp = 0; vp < 8; vp++) {
-    var vWorstIdx = -1, vWorstScore = Infinity;
+    var vwI = -1, vwS = Infinity;
     for (var va = 0; va < selected.length; va++) {
-      for (var vb = va + 1; vb < selected.length; vb++) {
+      for (var vb = va+1; vb < selected.length; vb++) {
         var vdL = deltaE(selected[va].lightHex, selected[vb].lightHex);
         var vdD = deltaE(selected[va].darkHex, selected[vb].darkHex);
         var vhd = hueDist(selected[va].hue, selected[vb].hue);
         var vde = Math.min(vdL, vdD);
         if ((vhd < 25) || (vde < 20)) {
-          var vsc = vhd / 25 + vde / 20;
-          /* Only re-roll the non-brand one; if both are brand, skip */
-          var rerollIdx = !selected[vb].brand ? vb : (!selected[va].brand ? va : -1);
-          if (rerollIdx >= 0 && vsc < vWorstScore) { vWorstScore = vsc; vWorstIdx = rerollIdx; }
+          var vsc = vhd/25 + vde/20;
+          var rIdx = !selected[vb].brand ? vb : (!selected[va].brand ? va : -1);
+          if (rIdx >= 0 && vsc < vwS) { vwS = vsc; vwI = rIdx; }
         }
       }
     }
-    if (vWorstIdx < 0) break;
-    var vOthers = [], vOtherH = [];
-    for (var vri = 0; vri < selected.length; vri++) {
-      if (vri !== vWorstIdx) { vOthers.push({lightHex:selected[vri].lightHex, darkHex:selected[vri].darkHex}); vOtherH.push(selected[vri].hue); }
-    }
-    var vFix = findDistinctColor(selected[vWorstIdx].hue, selected[vWorstIdx].sat, vOthers, vOtherH, darkBg);
-    selected[vWorstIdx] = {hue:vFix.hue, sat:vFix.sat, lightHex:vFix.pair.lightHex, darkHex:vFix.pair.darkHex, name:"H"+Math.round(vFix.hue)+"\u00B0", brand:false};
+    if (vwI < 0) break;
+    var vO=[], vHH=[];
+    for (var vr = 0; vr < selected.length; vr++) { if (vr !== vwI) { vO.push({lightHex:selected[vr].lightHex,darkHex:selected[vr].darkHex}); vHH.push(selected[vr].hue); } }
+    var vF = findDistinctColor(selected[vwI].hue, selected[vwI].sat, vO, vHH, darkBg);
+    selected[vwI] = {hue:vF.hue, sat:vF.sat, lightHex:vF.pair.lightHex, darkHex:vF.pair.darkHex, name:"H"+Math.round(vF.hue)+"°", brand:false};
   }
 
-  /* ── Phase 6: Build spectrum + categorical ── */
+  /* Phase 6: Build spectrum + categorical */
   var spectrum = selected.slice().sort(function(a,b){return a.hue-b.hue;}).map(function(s3,i2){
     return {id:i2, hue:s3.hue, sat:s3.sat, lightHex:s3.lightHex, darkHex:s3.darkHex, label:s3.brand?"~"+s3.name:s3.name, swapped:s3.brand?s3.name:null};
   });
@@ -316,34 +395,28 @@ function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
     return {id:ni, hue:s4.hue, sat:s4.sat, lightHex:s4.lightHex, darkHex:s4.darkHex, label:s4.label, swapped:s4.swapped};
   });
 
-  /* ── Semantic: always generated ── */
   var sem = SEM_BASES.map(function(base,i3){var pair=makePair(base.hue,base.sat,darkBg);return {id:i3,hue:base.hue,sat:pair.sat,lightHex:pair.lightHex,darkHex:pair.darkHex,label:base.label};});
 
-  /* ── Deemphasis: use brand grays if available ── */
+  /* Deemphasis: darkest, best-middle, lightest from brand grays */
   var deem;
   if (grays.length >= 2) {
-    var gSorted = grays.map(function(g){var gh=hex2hsl(g.hex);return {hex:g.hex,name:g.name,hue:gh.h,sat:gh.s,l:gh.l};}).sort(function(a,b){return a.l-b.l;});
-    /* Pick 3 most spread by lightness, using deltaE for distinctness */
-    var picked = [gSorted[0]];
-    for (var gi2 = 1; gi2 < gSorted.length && picked.length < 3; gi2++) {
-      var ok2 = true;
-      for (var pi = 0; pi < picked.length; pi++) { if (deltaE(gSorted[gi2].hex, picked[pi].hex) < 8) { ok2 = false; break; } }
-      if (ok2) picked.push(gSorted[gi2]);
-    }
-    /* If still need more, relax threshold */
-    if (picked.length < 3) {
-      for (var gi3 = 1; gi3 < gSorted.length && picked.length < 3; gi3++) {
-        var dup = false;
-        for (var pi2 = 0; pi2 < picked.length; pi2++) { if (gSorted[gi3].hex === picked[pi2].hex) { dup = true; break; } }
-        if (!dup) picked.push(gSorted[gi3]);
+    var gAll = grays.map(function(g){var gh=hex2hsl(g.hex);return {hex:g.hex,name:g.name,hue:gh.h,sat:gh.s,l:gh.l};}).sort(function(a,b){return a.l-b.l;});
+    var picked = [gAll[0]];
+    if (gAll.length >= 2) picked.push(gAll[gAll.length-1]);
+    if (gAll.length >= 3) {
+      var bestMid = null, bestSpread = 0;
+      for (var gm = 1; gm < gAll.length-1; gm++) {
+        var spread = Math.min(Math.abs(gAll[gm].l - picked[0].l), Math.abs(gAll[gm].l - picked[1].l));
+        if (spread > bestSpread) { bestSpread = spread; bestMid = gAll[gm]; }
       }
+      if (bestMid) picked.splice(1, 0, bestMid);
     }
-    while (picked.length < 3) { var last = picked[picked.length-1]; picked.push({hex:last.hex,name:last.name,hue:last.hue,sat:last.sat,l:Math.min(last.l+15,85)}); }
+    while (picked.length < 3) picked.push(picked[picked.length-1]);
     deem = picked.map(function(g2,i4){
       return {id:i4, hue:g2.hue, sat:g2.sat,
         lightHex:adjustForContrast(g2.hex,"#ffffff",4.5),
         darkHex:adjustForContrast(g2.hex,darkBg||"#121212",4.5),
-        label:["Light","Mid","Dark"][i4]};
+        label:["Dark","Mid","Light"][i4]};
     });
   } else {
     var deemBases = DEEM_OPT[optIdx] || DEEM_OPT[0];
@@ -424,7 +497,7 @@ function generateFresh(brandColors, optIdx, darkBg, reworkSeed) {
     }
     var rA = tryReroll2(worstA2), rB = tryReroll2(worstB2);
     var best2 = rA.combined >= rB.combined ? {idx:worstA2,fix:rA.fix} : {idx:worstB2,fix:rB.fix};
-    cat[best2.idx] = {id:cat[best2.idx].id, hue:best2.fix.hue, sat:best2.fix.sat, lightHex:best2.fix.pair.lightHex, darkHex:best2.fix.pair.darkHex, label:"H"+Math.round(best2.fix.hue)+"\u00B0", swapped:null};
+    cat[best2.idx] = {id:cat[best2.idx].id, hue:best2.fix.hue, sat:best2.fix.sat, lightHex:best2.fix.pair.lightHex, darkHex:best2.fix.pair.darkHex, label:"H"+Math.round(best2.fix.hue)+"°", swapped:null};
   }
 
   var sem = SEM_BASES.map(function(base,i){var pair=makePair(base.hue,base.sat,darkBg);return {id:i,hue:base.hue,sat:pair.sat,lightHex:pair.lightHex,darkHex:pair.darkHex,label:base.label};});
@@ -905,9 +978,37 @@ export default function App() {
       var idx=-1;
       for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
+      var s=slots[idx];
+
+      /* DEEMPHASIS: toggle between cool gray (~215°) and warm gray (~25°) */
+      if(type==="deemphasis"){
+        var warmHues=[20,25,30,15,35];
+        var coolHues=[210,215,220,200,230];
+        var curHue=s.hue;
+        var isWarm=curHue<90||curHue>330;
+        var newHue;
+        if(isWarm){newHue=coolHues[(s._grayStep||0)%coolHues.length];s._grayStep=((s._grayStep||0)+1);}
+        else{newHue=warmHues[(s._grayStep||0)%warmHues.length];s._grayStep=((s._grayStep||0)+1);}
+        var rawL=hsl2hex(newHue,s.sat||8,hex2hsl(s.lightHex).l);
+        var rawD=hsl2hex(newHue,s.sat||8,hex2hsl(s.darkHex).l);
+        slots[idx]={id:s.id, hue:newHue, sat:s.sat||8, lightHex:adjustForContrast(rawL,"#ffffff",4.5), darkHex:adjustForContrast(rawD,darkStroke,4.5), label:s.label, swapped:s.swapped, _grayStep:s._grayStep};
+        return next;
+      }
+
+      /* SEMANTIC: cycle through ±15° of base hue */
+      if(type==="semantic"){
+        var semStep=((s._semStep||0)+1)%8;
+        var semOffsets=[-15,-10,-5,0,5,10,15,0];
+        var baseHue=s._baseHue!=null?s._baseHue:s.hue;
+        var newSemHue=(baseHue+semOffsets[semStep]+360)%360;
+        var pair=makePair(newSemHue,s.sat,darkStroke);
+        slots[idx]={id:s.id, hue:newSemHue, sat:pair.sat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:s.label, swapped:s.swapped, _semStep:semStep, _baseHue:baseHue};
+        return next;
+      }
+
+      /* CATEGORICAL: full hue shift with neighbor check */
       var otherHues=[]; var otherPairs=[];
       for(var j=0;j<slots.length;j++){if(j!==idx){otherHues.push(slots[j].hue);otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}}
-      var s=slots[idx];
       var best=null, bestDist=0;
       for(var attempt=0;attempt<80;attempt++){
         var candidate=(s.hue+30+Math.floor(Math.random()*300))%360;
@@ -923,13 +1024,12 @@ export default function App() {
         if(worstDE>bestDist){bestDist=worstDE;best={hue:candidate,sat:satOpt,pair:p};}
       }
       if(!best){
-        /* Fallback: find best hue with neighbor check */
         var fbHue=(s.hue+60)%360;
         if(minHueDist(fbHue,otherHues)<30) fbHue=(s.hue+120)%360;
         if(minHueDist(fbHue,otherHues)<30) fbHue=(s.hue+180)%360;
         best={hue:fbHue,sat:s.sat,pair:makePair(fbHue,s.sat,darkStroke)};
       }
-      slots[idx]={id:s.id, hue:best.hue, sat:best.sat, lightHex:best.pair.lightHex, darkHex:best.pair.darkHex, label:"H"+Math.round(best.hue)+"\u00B0", swapped:null};
+      slots[idx]={id:s.id, hue:best.hue, sat:best.sat, lightHex:best.pair.lightHex, darkHex:best.pair.darkHex, label:"H"+Math.round(best.hue)+"°", swapped:null};
       if(type==="categorical"){
         next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
       }
@@ -965,6 +1065,36 @@ export default function App() {
       for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
       var s=slots[idx];
+
+      /* DEEMPHASIS: cycle through gray lightness variations only */
+      if(type==="deemphasis"){
+        var graySteps=[30,38,46,54,62,70,78,86];
+        var gStep=((s._grayTone||0)+1)%graySteps.length;
+        var gL=graySteps[gStep];
+        var gHue=s.hue||215;
+        var gSat=s.sat||8;
+        var lH=adjustForContrast(hsl2hex(gHue,gSat,gL),"#ffffff",4.5);
+        var dH=adjustForContrast(hsl2hex(gHue,gSat,gL),darkStroke,4.5);
+        slots[idx]={id:s.id, hue:gHue, sat:gSat, lightHex:lH, darkHex:dH, label:s.label, swapped:s.swapped, _grayTone:gStep, _grayStep:s._grayStep};
+        return next;
+      }
+
+      /* SEMANTIC: cycle through sat/lightness variations within same hue */
+      if(type==="semantic"){
+        var semTones=[{ds:0,dl:0},{ds:10,dl:5},{ds:-12,dl:-8},{ds:18,dl:-5},{ds:-8,dl:10},{ds:5,dl:-12}];
+        var sStep=((s._semTone||0)+1)%semTones.length;
+        var st=semTones[sStep];
+        var bSat=s._baseSat!=null?s._baseSat:s.sat;
+        var bHue=s._baseHue!=null?s._baseHue:s.hue;
+        var nSat=Math.min(95,Math.max(30,bSat+st.ds));
+        var nL=Math.min(65,Math.max(25,50+st.dl));
+        var slH=adjustForContrast(hsl2hex(bHue,nSat,nL),"#ffffff",4.5);
+        var sdH=adjustForContrast(hsl2hex(bHue,nSat,nL),darkStroke,4.5);
+        slots[idx]={id:s.id, hue:bHue, sat:nSat, lightHex:slH, darkHex:sdH, label:s.label, swapped:s.swapped, _semTone:sStep, _baseSat:bSat, _baseHue:bHue};
+        return next;
+      }
+
+      /* CATEGORICAL: full tone cycle with neighbor checking */
       var baseSat=s._baseSat!=null?s._baseSat:s.sat;
       var baseHue=s._baseHue!=null?s._baseHue:s.hue;
 
@@ -1026,7 +1156,7 @@ export default function App() {
       var startHex=hsl2hex(newH,newS,newL);
       var newLightHex=adjustForContrast(startHex,"#ffffff",4.5);
       var newDarkHex=adjustForContrast(startHex,darkStroke,4.5);
-      slots[idx]={id:s.id, hue:newH, sat:newS, lightHex:newLightHex, darkHex:newDarkHex, label:"H"+Math.round(newH)+"\u00B0", swapped:null};
+      slots[idx]={id:s.id, hue:newH, sat:newS, lightHex:newLightHex, darkHex:newDarkHex, label:"H"+Math.round(newH)+"°", swapped:null};
 
       /* Auto-fix any siblings that are now too close to the user's chosen color */
       var conflicts=[];
@@ -1045,7 +1175,7 @@ export default function App() {
           if(ri!==cIdx){others.push({lightHex:slots[ri].lightHex,darkHex:slots[ri].darkHex});otherH.push(slots[ri].hue);}
         }
         var fix=findDistinctColor(slots[cIdx].hue,slots[cIdx].sat,others,otherH,darkStroke);
-        slots[cIdx]={id:slots[cIdx].id, hue:fix.hue, sat:fix.sat, lightHex:fix.pair.lightHex, darkHex:fix.pair.darkHex, label:"H"+Math.round(fix.hue)+"\u00B0", swapped:null};
+        slots[cIdx]={id:slots[cIdx].id, hue:fix.hue, sat:fix.sat, lightHex:fix.pair.lightHex, darkHex:fix.pair.darkHex, label:"H"+Math.round(fix.hue)+"°", swapped:null};
       }
 
       if(type==="categorical"){
