@@ -591,15 +591,16 @@ function LineChart(p) {
 /* ═══ SWATCH ═══ */
 function Swatch(props) {
   var hex=props.hex,stroke=props.stroke,isDark=props.isDark,darkBg=props.darkBg;
-  var onHue=props.onHue,onLight=props.onLight,onSelect=props.onSelect,label=props.label;
+  var onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect,label=props.label;
   var slotId=props.slotId,slotType=props.slotType;
   var bg=isDark?darkBg:"#ffffff"; var ratio=CR(hex,bg); var pass=ratio>=4.5;
   var btnStyle={position:"absolute",width:22,height:22,borderRadius:11,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2};
   return (
     <div style={{position:"relative",width:96,borderRadius:8,overflow:"hidden",backgroundColor:"#fff",border:"1px solid #eee",flexShrink:0}}>
-      <div style={{height:52,backgroundColor:hex,position:"relative",cursor:"pointer",border:"2px solid "+stroke,borderRadius:"6px 6px 0 0",boxSizing:"border-box"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:label,slotId:slotId,slotType:slotType,onHue:onHue,onLight:onLight});}}>
+      <div style={{height:52,backgroundColor:hex,position:"relative",cursor:"pointer",border:"2px solid "+stroke,borderRadius:"6px 6px 0 0",boxSizing:"border-box"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:label,slotId:slotId,slotType:slotType,onHue:onHue,onSat:onSat,onLight:onLight});}}>
         {onHue&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onHue();}} style={Object.assign({},btnStyle,{top:3,left:3})} title="Shift hue"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
-        {onLight&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onLight();}} style={Object.assign({},btnStyle,{top:3,right:3})} title="Cycle tone"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+        {onSat&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onSat();}} style={Object.assign({},btnStyle,{top:3,left:"50%",transform:"translateX(-50%)"})} title="Cycle saturation"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg></button>)}
+        {onLight&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onLight();}} style={Object.assign({},btnStyle,{top:3,right:3})} title="Cycle lightness"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
       </div>
       <div style={{padding:"4px 6px 5px",display:"flex",alignItems:"center",gap:4}}>
         <div style={{width:8,height:8,borderRadius:4,backgroundColor:pass?"#1a7a3d":"#c42b2b",flexShrink:0}} />
@@ -612,10 +613,10 @@ function Swatch(props) {
 /* ═══ OPTION PANEL ═══ */
 function OptionPanel(props) {
   var pal=props.pal,isDark=props.isDark,stroke=props.stroke,darkBg=props.darkBg;
-  var activeTab=props.activeTab,onHue=props.onHue,onLight=props.onLight,onSelect=props.onSelect;
+  var activeTab=props.activeTab,onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect;
   var mode=isDark?"D":"L"; var catSlots=pal.categorical||[]; var specSlots=pal.spectrum||[]; var semSlots=pal.semantic||[]; var deemSlots=pal.deemphasis||[];
   function SL(lp){return (<div style={{marginBottom:4,marginTop:14,display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:"0.08em",color:"#555"}}>{lp.text}</span>{lp.sub&&<span style={{fontSize:12,color:"#777",fontFamily:"'Space Mono',monospace"}}>{lp.sub}</span>}</div>);}
-  function renderSwatches(slots,type){return (<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{slots.map(function(s){var hex=isDark?s.darkHex:s.lightHex;return (<Swatch key={type+"-"+s.id+"-"+s.hue+"-"+mode} hex={hex} stroke={stroke} isDark={isDark} darkBg={darkBg} onHue={onHue?function(){onHue(type,s.id);}:null} onLight={onLight?function(){onLight(type,s.id);}:null} onSelect={onSelect} label={s.label} slotId={s.id} slotType={type} />);})}</div>);}
+  function renderSwatches(slots,type){return (<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{slots.map(function(s){var hex=isDark?s.darkHex:s.lightHex;return (<Swatch key={type+"-"+s.id+"-"+s.hue+"-"+mode} hex={hex} stroke={stroke} isDark={isDark} darkBg={darkBg} onHue={onHue?function(){onHue(type,s.id);}:null} onSat={onSat?function(){onSat(type,s.id);}:null} onLight={onLight?function(){onLight(type,s.id);}:null} onSelect={onSelect} label={s.label} slotId={s.id} slotType={type} />);})}</div>);}
   return (
     <div style={{flex:1,minWidth:0}}>
       <div style={{marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
@@ -629,7 +630,7 @@ function OptionPanel(props) {
         <SL text="Spectrum" sub="sorted by hue" />
         <div style={{borderRadius:6,padding:8,backgroundColor:"#f8f8f8",border:"1px solid #eee",marginBottom:8}}>
           <div style={{display:"flex",height:24,borderRadius:4,overflow:"hidden",marginBottom:6}}>{specSlots.map(function(s,i){return <div key={i} style={{flex:1,backgroundColor:isDark?s.darkHex:s.lightHex}} />;})}</div>
-          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{specSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+stroke,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:s.label,slotId:s.id,slotType:"categorical",onHue:onHue?function(){onHue("categorical",s.id);}:null,onLight:onLight?function(){onLight("categorical",s.id);}:null});}} title={hex} />);})}</div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{specSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+stroke,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:s.label,slotId:s.id,slotType:"categorical",onHue:onHue?function(){onHue("categorical",s.id);}:null,onSat:onSat?function(){onSat("categorical",s.id);}:null,onLight:onLight?function(){onLight("categorical",s.id);}:null});}} title={hex} />);})}</div>
         </div>
       </div>)}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
@@ -676,7 +677,8 @@ function ColorDetail(props) {
       <div style={{backgroundColor:"#fff",borderRadius:14,maxWidth:340,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
         <div style={{height:110,backgroundColor:displayHex,color:fg,position:"relative",display:"flex",alignItems:"flex-end",padding:14}}>
           {info.onHue&&!isEditing&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Shift hue"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
-          {info.onLight&&!isEditing&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle tone"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+          {info.onSat&&!isEditing&&(<button onClick={function(){info.onSat();onClose();}} style={{position:"absolute",top:10,left:"50%",transform:"translateX(-50%)",width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle saturation"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg></button>)}
+          {info.onLight&&!isEditing&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle lightness"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
           {canEdit&&(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:36,height:36,borderRadius:18,backgroundColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",border:"none"}}>
             <input type="color" value={displayHex} onChange={handleColorInput} style={{position:"absolute",inset:-6,width:"150%",height:"150%",cursor:"pointer",opacity:0}} />
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={fg} strokeOpacity="0.5" strokeWidth="1.5" strokeLinecap="round"><path d="M12 1l3 3-9 9H3v-3z"/><path d="M10 3l3 3"/></svg>
@@ -730,8 +732,8 @@ function BrandStrip(props) {
 
 /* ═══ COMPARE (compact) ═══ */
 function CompareView(props) {
-  var opts=props.opts,darkStroke=props.darkStroke,activeTab=props.activeTab,brandColors=props.brandColors,brands=props.brands,activeBrand=props.activeBrand,setSelInfo=props.setSelInfo,setCompare=props.setCompare,setSlotHSL=props.setSlotHSL,selInfo=props.selInfo,hueShift=props.hueShift,lightShift=props.lightShift;
-  function CS(cp){var oi=cp.oi,type=cp.type||"categorical";return (<div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var hCb=hueShift?function(){hueShift(oi,type,s.id);}:null;var lCb=lightShift?function(){lightShift(oi,type,s.id);}:null;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+cp.stk,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){setSelInfo({hex:hex,label:s.label,slotId:s.id,slotType:type,onHue:hCb,onLight:lCb});}} title={hex} />);})}</div>);}
+  var opts=props.opts,darkStroke=props.darkStroke,activeTab=props.activeTab,brandColors=props.brandColors,brands=props.brands,activeBrand=props.activeBrand,setSelInfo=props.setSelInfo,setCompare=props.setCompare,setSlotHSL=props.setSlotHSL,selInfo=props.selInfo,hueShift=props.hueShift,satShift=props.satShift,lightShift=props.lightShift;
+  function CS(cp){var oi=cp.oi,type=cp.type||"categorical";return (<div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var hCb=hueShift?function(){hueShift(oi,type,s.id);}:null;var sCb=satShift?function(){satShift(oi,type,s.id);}:null;var lCb=lightShift?function(){lightShift(oi,type,s.id);}:null;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+cp.stk,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){setSelInfo({hex:hex,label:s.label,slotId:s.id,slotType:type,onHue:hCb,onSat:sCb,onLight:lCb});}} title={hex} />);})}</div>);}
   function CSL(cp){var stk=cp.stk||"#ffffff";return (<div style={{marginTop:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var ratio=CR(hex,cp.bg).toFixed(1);var nn=parseFloat(ratio);return (<div key={i} style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}><div style={{width:60,height:18,borderRadius:3,backgroundColor:hex,border:"2px solid "+stk,boxSizing:"border-box",flexShrink:0}} /><span style={{color:hex,fontWeight:700,fontSize:11}}>{s.label}</span><span style={{fontSize:9,fontWeight:700,color:"#fff",backgroundColor:nn>=4.5?"#1a7a3d":"#c42b2b",padding:"1px 3px",borderRadius:2}}>{ratio}:1</span></div>);})}</div>);}
   function CC(cp){var bg=cp.dk?darkStroke:"#ffffff";return (<div style={{borderRadius:8,backgroundColor:bg,border:"1px solid "+(cp.dk?"rgba(255,255,255,0.08)":"#e8e8e8"),padding:10,marginBottom:6}}>{cp.children}</div>);}
   var sub={fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace",marginBottom:4};
@@ -1006,28 +1008,46 @@ export default function App() {
         return next;
       }
 
-      /* CATEGORICAL: full hue shift with neighbor check */
+      /* CATEGORICAL: aggressive hue shift — tries to find maximally different hue */
       var otherHues=[]; var otherPairs=[];
       for(var j=0;j<slots.length;j++){if(j!==idx){otherHues.push(slots[j].hue);otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}}
+
+      /* Find the largest hue gap and target its center */
+      var sortedH=otherHues.slice().sort(function(a,b){return a-b;});
+      var maxGap=0, gapCenter=0;
+      for(var gi=0;gi<=sortedH.length;gi++){
+        var lo=gi>0?sortedH[gi-1]:sortedH[sortedH.length-1]-360;
+        var hi2=gi<sortedH.length?sortedH[gi]:sortedH[0]+360;
+        var gap=hi2-lo;
+        if(gap>maxGap){maxGap=gap;gapCenter=((lo+gap/2)%360+360)%360;}
+      }
+
+      /* Try targeted gap center first, then random, with progressively relaxed thresholds */
       var best=null, bestDist=0;
-      for(var attempt=0;attempt<80;attempt++){
-        var candidate=(s.hue+30+Math.floor(Math.random()*300))%360;
-        if(minHueDist(candidate,otherHues)<30) continue;
-        var satOpt=Math.min(90,Math.max(20,s.sat+Math.floor(Math.random()*40)-20));
-        var startL=Math.min(70,Math.max(15,45+Math.floor(Math.random()*30)-15));
-        var lHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),"#ffffff",4.5);
-        var dHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),darkStroke,4.5);
-        var p={lightHex:lHex,darkHex:dHex,hue:candidate,sat:satOpt};
-        if(isDistinctEnough(p.lightHex,p.darkHex,otherPairs)){best={hue:candidate,sat:satOpt,pair:p};break;}
-        var worstDE=Infinity;
-        for(var k=0;k<otherPairs.length;k++){var dL=deltaE(p.lightHex,otherPairs[k].lightHex);var dD=deltaE(p.darkHex,otherPairs[k].darkHex);var w=Math.min(dL,dD);if(w<worstDE)worstDE=w;}
-        if(worstDE>bestDist){bestDist=worstDE;best={hue:candidate,sat:satOpt,pair:p};}
+      var thresholds=[25,20,15,10];
+      for(var ti=0;ti<thresholds.length&&!best;ti++){
+        var thresh=thresholds[ti];
+        /* First 10 attempts: target gap center with variation */
+        for(var attempt=0;attempt<100;attempt++){
+          var candidate;
+          if(attempt<10){candidate=(Math.round(gapCenter)+Math.floor(Math.random()*30)-15+360)%360;}
+          else{candidate=Math.floor(Math.random()*360);}
+          if(candidate===Math.round(s.hue)) continue;
+          if(minHueDist(candidate,otherHues)<thresh) continue;
+          var satOpt=Math.min(90,Math.max(20,55+Math.floor(Math.random()*40)-20));
+          var startL=Math.min(70,Math.max(15,45+Math.floor(Math.random()*30)-15));
+          var lHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),"#ffffff",4.5);
+          var dHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),darkStroke,4.5);
+          var p={lightHex:lHex,darkHex:dHex,hue:candidate,sat:satOpt};
+          var worstDE=Infinity;
+          for(var k=0;k<otherPairs.length;k++){var dL=deltaE(p.lightHex,otherPairs[k].lightHex);var dD=deltaE(p.darkHex,otherPairs[k].darkHex);var w=Math.min(dL,dD);if(w<worstDE)worstDE=w;}
+          if(worstDE>bestDist){bestDist=worstDE;best={hue:candidate,sat:satOpt,pair:p};}
+          if(worstDE>=MIN_DE) break; /* good enough */
+        }
+        if(best&&bestDist>=MIN_DE) break; /* found a good one, stop relaxing */
       }
       if(!best){
-        var fbHue=(s.hue+60)%360;
-        if(minHueDist(fbHue,otherHues)<30) fbHue=(s.hue+120)%360;
-        if(minHueDist(fbHue,otherHues)<30) fbHue=(s.hue+180)%360;
-        best={hue:fbHue,sat:s.sat,pair:makePair(fbHue,s.sat,darkStroke)};
+        best={hue:Math.round(gapCenter),sat:s.sat,pair:makePair(Math.round(gapCenter),s.sat,darkStroke)};
       }
       slots[idx]={id:s.id, hue:best.hue, sat:best.sat, lightHex:best.pair.lightHex, darkHex:best.pair.darkHex, label:"H"+Math.round(best.hue)+"°", swapped:null};
       if(type==="categorical"){
@@ -1037,25 +1057,65 @@ export default function App() {
     });
   },[darkStroke]);
 
-  /* Tone cycle: wide variety of sat/lightness/hue combos with neighbor checking */
-  var TONE_STEPS = [
-    {ds:0, dl:0, dh:0},      /* original */
-    {ds:15, dl:8, dh:3},     /* vivid, lighter, slight hue shift */
-    {ds:-20, dl:-15, dh:-4},  /* muted, much darker */
-    {ds:30, dl:-5, dh:5},    /* very vivid, slightly dark */
-    {ds:-10, dl:15, dh:-3},   /* soft, lighter */
-    {ds:20, dl:-20, dh:6},   /* saturated, dark */
-    {ds:-30, dl:12, dh:-6},   /* very muted, lighter */
-    {ds:35, dl:-25, dh:4},   /* max vivid, very dark */
-    {ds:-15, dl:-28, dh:-5},  /* muted, very dark (like #000066) */
-    {ds:10, dl:20, dh:7},    /* slightly vivid, very light */
-    {ds:25, dl:-32, dh:-8},  /* vivid, extremely dark */
-    {ds:-35, dl:-8, dh:8},   /* very desaturated, dark */
-    {ds:5, dl:-18, dh:-7},   /* slight vivid, dark */
-    {ds:-5, dl:25, dh:5},    /* soft, very light */
-    {ds:40, dl:5, dh:-4},    /* max saturated, slightly light */
-    {ds:-25, dl:-22, dh:6},  /* muted, deep dark */
-  ];
+  /* ═══ SATURATION SHIFT (S button) ═══ */
+  var SAT_STEPS = [20, 30, 40, 50, 60, 70, 80, 90, 95];
+  var satShift=useCallback(function(oi,type,sid){
+    setOpts(function(prev){
+      var next=JSON.parse(JSON.stringify(prev));
+      var slots=next[oi][type];
+      if(!slots) return prev;
+      var idx=-1;
+      for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
+      if(idx<0) return prev;
+      var s=slots[idx];
+      var curHsl=hex2hsl(s.lightHex);
+
+      if(type==="deemphasis"){
+        /* Deemphasis: very low sat range (0-20) */
+        var deemSatSteps=[0,3,6,10,14,18];
+        var dss=((s._satStep||0)+1)%deemSatSteps.length;
+        var nSat=deemSatSteps[dss];
+        var lH=adjustForContrast(hsl2hex(s.hue,nSat,curHsl.l),"#ffffff",4.5);
+        var dH=adjustForContrast(hsl2hex(s.hue,nSat,curHsl.l),darkStroke,4.5);
+        slots[idx]=Object.assign({},s,{sat:nSat,lightHex:lH,darkHex:dH,_satStep:dss});
+        return next;
+      }
+
+      if(type==="semantic"){
+        /* Semantic: moderate sat range */
+        var semSatSteps=[35,45,55,65,75,85,95];
+        var sss=((s._satStep||0)+1)%semSatSteps.length;
+        var nSat2=semSatSteps[sss];
+        var lH2=adjustForContrast(hsl2hex(s.hue,nSat2,curHsl.l),"#ffffff",4.5);
+        var dH2=adjustForContrast(hsl2hex(s.hue,nSat2,curHsl.l),darkStroke,4.5);
+        slots[idx]=Object.assign({},s,{sat:nSat2,lightHex:lH2,darkHex:dH2,_satStep:sss});
+        return next;
+      }
+
+      /* Categorical: full sat range with neighbor check */
+      var step=((s._satStep||0)+1)%SAT_STEPS.length;
+      var otherPairs=[];
+      for(var j=0;j<slots.length;j++){if(j!==idx) otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}
+      for(var tries=0;tries<SAT_STEPS.length;tries++){
+        var tryStep=(step+tries)%SAT_STEPS.length;
+        var nSat3=SAT_STEPS[tryStep];
+        var lH3=adjustForContrast(hsl2hex(s.hue,nSat3,curHsl.l),"#ffffff",4.5);
+        var dH3=adjustForContrast(hsl2hex(s.hue,nSat3,curHsl.l),darkStroke,4.5);
+        var tooClose=false;
+        for(var k=0;k<otherPairs.length;k++){if(deltaE(lH3,otherPairs[k].lightHex)<18||deltaE(dH3,otherPairs[k].darkHex)<18){tooClose=true;break;}}
+        if(!tooClose){step=tryStep;break;}
+      }
+      var fSat=SAT_STEPS[step];
+      var fL=adjustForContrast(hsl2hex(s.hue,fSat,curHsl.l),"#ffffff",4.5);
+      var fD=adjustForContrast(hsl2hex(s.hue,fSat,curHsl.l),darkStroke,4.5);
+      slots[idx]=Object.assign({},s,{sat:fSat,lightHex:fL,darkHex:fD,_satStep:step});
+      if(type==="categorical"){next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});}
+      return next;
+    });
+  },[darkStroke]);
+
+  /* ═══ LIGHTNESS SHIFT (L button) ═══ */
+  var LIGHT_STEPS = [12, 20, 28, 36, 44, 52, 60, 68, 75];
   var lightShift=useCallback(function(oi,type,sid){
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
@@ -1066,79 +1126,44 @@ export default function App() {
       if(idx<0) return prev;
       var s=slots[idx];
 
-      /* DEEMPHASIS: cycle through gray lightness variations only */
       if(type==="deemphasis"){
         var graySteps=[30,38,46,54,62,70,78,86];
-        var gStep=((s._grayTone||0)+1)%graySteps.length;
+        var gStep=((s._lStep||0)+1)%graySteps.length;
         var gL=graySteps[gStep];
-        var gHue=s.hue||215;
-        var gSat=s.sat||8;
-        var lH=adjustForContrast(hsl2hex(gHue,gSat,gL),"#ffffff",4.5);
-        var dH=adjustForContrast(hsl2hex(gHue,gSat,gL),darkStroke,4.5);
-        slots[idx]={id:s.id, hue:gHue, sat:gSat, lightHex:lH, darkHex:dH, label:s.label, swapped:s.swapped, _grayTone:gStep, _grayStep:s._grayStep};
+        var lH=adjustForContrast(hsl2hex(s.hue||215,s.sat||8,gL),"#ffffff",4.5);
+        var dH=adjustForContrast(hsl2hex(s.hue||215,s.sat||8,gL),darkStroke,4.5);
+        slots[idx]=Object.assign({},s,{lightHex:lH,darkHex:dH,_lStep:gStep});
         return next;
       }
 
-      /* SEMANTIC: cycle through sat/lightness variations within same hue */
       if(type==="semantic"){
-        var semTones=[{ds:0,dl:0},{ds:10,dl:5},{ds:-12,dl:-8},{ds:18,dl:-5},{ds:-8,dl:10},{ds:5,dl:-12}];
-        var sStep=((s._semTone||0)+1)%semTones.length;
-        var st=semTones[sStep];
-        var bSat=s._baseSat!=null?s._baseSat:s.sat;
-        var bHue=s._baseHue!=null?s._baseHue:s.hue;
-        var nSat=Math.min(95,Math.max(30,bSat+st.ds));
-        var nL=Math.min(65,Math.max(25,50+st.dl));
-        var slH=adjustForContrast(hsl2hex(bHue,nSat,nL),"#ffffff",4.5);
-        var sdH=adjustForContrast(hsl2hex(bHue,nSat,nL),darkStroke,4.5);
-        slots[idx]={id:s.id, hue:bHue, sat:nSat, lightHex:slH, darkHex:sdH, label:s.label, swapped:s.swapped, _semTone:sStep, _baseSat:bSat, _baseHue:bHue};
+        var semLSteps=[25,32,39,46,53,60];
+        var sls=((s._lStep||0)+1)%semLSteps.length;
+        var nL=semLSteps[sls];
+        var slH=adjustForContrast(hsl2hex(s.hue,s.sat,nL),"#ffffff",4.5);
+        var sdH=adjustForContrast(hsl2hex(s.hue,s.sat,nL),darkStroke,4.5);
+        slots[idx]=Object.assign({},s,{lightHex:slH,darkHex:sdH,_lStep:sls});
         return next;
       }
 
-      /* CATEGORICAL: full tone cycle with neighbor checking */
-      var baseSat=s._baseSat!=null?s._baseSat:s.sat;
-      var baseHue=s._baseHue!=null?s._baseHue:s.hue;
-
-      /* Gather sibling colors for neighbor checking */
+      /* Categorical: full lightness range with neighbor check */
+      var step=((s._lStep||0)+1)%LIGHT_STEPS.length;
       var otherPairs=[];
       for(var j=0;j<slots.length;j++){if(j!==idx) otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}
-
-      /* Try steps starting from current, find the next one that passes neighbor check */
-      var startStep=((s._toneStep||0)+1)%TONE_STEPS.length;
-      var found=false;
-      for(var tries=0;tries<TONE_STEPS.length;tries++){
-        var step=(startStep+tries)%TONE_STEPS.length;
-        var t=TONE_STEPS[step];
-        var newHue=(baseHue+t.dh+360)%360;
-        var newSat=Math.min(95,Math.max(15,baseSat+t.ds));
-        var startL=Math.min(75,Math.max(12,50+t.dl));
-        var lightHex=adjustForContrast(hsl2hex(newHue,newSat,startL),"#ffffff",4.5);
-        var darkHex=adjustForContrast(hsl2hex(newHue,newSat,startL),darkStroke,4.5);
-
-        /* Check if result is distinct enough from siblings */
+      for(var tries=0;tries<LIGHT_STEPS.length;tries++){
+        var tryStep=(step+tries)%LIGHT_STEPS.length;
+        var nL2=LIGHT_STEPS[tryStep];
+        var lH2=adjustForContrast(hsl2hex(s.hue,s.sat,nL2),"#ffffff",4.5);
+        var dH2=adjustForContrast(hsl2hex(s.hue,s.sat,nL2),darkStroke,4.5);
         var tooClose=false;
-        for(var k=0;k<otherPairs.length;k++){
-          if(deltaE(lightHex,otherPairs[k].lightHex)<22 || deltaE(darkHex,otherPairs[k].darkHex)<22){tooClose=true;break;}
-        }
-        if(!tooClose){
-          slots[idx]={id:s.id, hue:newHue, sat:newSat, lightHex:lightHex, darkHex:darkHex, label:s.label, swapped:s.swapped, _toneStep:step, _baseSat:baseSat, _baseHue:baseHue};
-          found=true;
-          break;
-        }
+        for(var k=0;k<otherPairs.length;k++){if(deltaE(lH2,otherPairs[k].lightHex)<18||deltaE(dH2,otherPairs[k].darkHex)<18){tooClose=true;break;}}
+        if(!tooClose){step=tryStep;break;}
       }
-      /* If nothing passed, use the next step anyway (better than no change) */
-      if(!found){
-        var step2=startStep;
-        var t2=TONE_STEPS[step2];
-        var newHue2=(baseHue+t2.dh+360)%360;
-        var newSat2=Math.min(95,Math.max(15,baseSat+t2.ds));
-        var startL2=Math.min(75,Math.max(12,50+t2.dl));
-        var lightHex2=adjustForContrast(hsl2hex(newHue2,newSat2,startL2),"#ffffff",4.5);
-        var darkHex2=adjustForContrast(hsl2hex(newHue2,newSat2,startL2),darkStroke,4.5);
-        slots[idx]={id:s.id, hue:newHue2, sat:newSat2, lightHex:lightHex2, darkHex:darkHex2, label:s.label, swapped:s.swapped, _toneStep:step2, _baseSat:baseSat, _baseHue:baseHue};
-      }
-      if(type==="categorical"){
-        next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
-      }
+      var fL2=LIGHT_STEPS[step];
+      var fLH=adjustForContrast(hsl2hex(s.hue,s.sat,fL2),"#ffffff",4.5);
+      var fDH=adjustForContrast(hsl2hex(s.hue,s.sat,fL2),darkStroke,4.5);
+      slots[idx]=Object.assign({},s,{lightHex:fLH,darkHex:fDH,_lStep:step});
+      if(type==="categorical"){next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});}
       return next;
     });
   },[darkStroke]);
@@ -1189,7 +1214,7 @@ export default function App() {
   if(!loaded||!cur) return <div style={{padding:40,textAlign:"center",color:"#666"}}>Loading...</div>;
   var tabs=[{k:"categorical",l:"Categorical"},{k:"spectrum",l:"Spectrum"}];
 
-  if(compare) return <CompareView opts={opts} darkStroke={darkStroke} activeTab={activeTab} brandColors={brandColors} brands={brands} activeBrand={activeBrand} setSelInfo={setSelInfo} setCompare={setCompare} setSlotHSL={setSlotHSL} selInfo={selInfo} hueShift={hueShift} lightShift={lightShift} />;
+  if(compare) return <CompareView opts={opts} darkStroke={darkStroke} activeTab={activeTab} brandColors={brandColors} brands={brands} activeBrand={activeBrand} setSelInfo={setSelInfo} setCompare={setCompare} setSlotHSL={setSlotHSL} selInfo={selInfo} hueShift={hueShift} satShift={satShift} lightShift={lightShift} />;
 
   return (
     <div style={{minHeight:"100vh",background:"#edeef0",fontFamily:"'Outfit',sans-serif"}}>
@@ -1230,8 +1255,8 @@ export default function App() {
       {/* L and D side by side */}
       <div style={{maxWidth:1200,margin:"12px auto 0",padding:"0 16px 40px"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <OptionPanel pal={cur} isDark={false} stroke="#ffffff" darkBg={darkStroke} activeTab={activeTab} onHue={function(type,id){hueShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
-          <OptionPanel pal={cur} isDark={true} stroke={darkStroke} darkBg={darkStroke} activeTab={activeTab} onHue={function(type,id){hueShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
+          <OptionPanel pal={cur} isDark={false} stroke="#ffffff" darkBg={darkStroke} activeTab={activeTab} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
+          <OptionPanel pal={cur} isDark={true} stroke={darkStroke} darkBg={darkStroke} activeTab={activeTab} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
         </div>
         {/* Color Tables */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:16}}>
