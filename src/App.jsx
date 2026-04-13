@@ -520,7 +520,7 @@ function CompareView(props) {
     <div style={{minHeight:"100vh",background:"#edeef0",fontFamily:"'Outfit',sans-serif"}}>
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
       <div style={{position:"sticky",top:0,zIndex:30}}>
-      <div style={{background:"linear-gradient(135deg,#111,#333)",padding:"18px 24px 14px"}}><div style={{maxWidth:1500,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}><h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:33,color:"#fff",letterSpacing:"0.06em"}}>Compare All{activeBrand?" \u00B7 "+brands[activeBrand].name:""}</h1><button onClick={function(){setCompare(false);}} style={{padding:"8px 18px",borderRadius:6,border:"1px solid #555",backgroundColor:"transparent",color:"#666",fontSize:15,cursor:"pointer",fontWeight:600}}>Back to Editor</button></div></div>
+      <div style={{background:"linear-gradient(135deg,#111,#333)",padding:"18px 24px 14px"}}><div style={{maxWidth:1500,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}><h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:33,color:"#fff",letterSpacing:"0.06em"}}>Compare All{activeBrand?" · "+brands[activeBrand].name:""}</h1><button onClick={function(){setCompare(false);}} style={{padding:"8px 18px",borderRadius:6,border:"1px solid #555",backgroundColor:"transparent",color:"#666",fontSize:15,cursor:"pointer",fontWeight:600}}>Back to Editor</button></div></div>
       <div style={{maxWidth:1500,margin:"0 auto",padding:"6px 16px 0",background:"#edeef0"}}><BrandStrip brandColors={brandColors} /></div>
       </div>
       <div style={{maxWidth:1500,margin:"0 auto",padding:"0 16px 50px"}}>
@@ -613,147 +613,99 @@ export default function App() {
     var brandName = activeBrand ? brands[activeBrand].name : "Generic";
     var hx = function(hex) { return hex.replace("#","").toUpperCase(); };
 
-    /* Template color map — HAP colors in Opt1-3 template, ALL 9 positions including duplicate */
-    var T_L_CAT = ["772ED1","C426D9","0D54F2","198617","CF480B","0D0DF2","167D99","772ED1","917107"];
-    var T_D_CAT = ["9E6ADE","CC45DE","477DF5","29D926","F2540D","7070F7","20B6DF","9E6ADE","F4C325"];
-    var T_L_SPEC = ["0D54F2","167D99","0D0DF2","C426D9","917107","772ED1","CF480B","772ED1","198617"];
-    var T_D_SPEC = ["477DF5","20B6DF","7070F7","CC45DE","F4C325","9E6ADE","F2540D","9E6ADE","29D926"];
-    var T_L_SEM = ["1D8640","A26B0D","DB2424"];
-    var T_D_SEM = ["2DD264","EC9C13","E24E4E"];
-    var T_L_DEEM = ["6B7584","6D7680","565B61"];
-    var T_D_DEEM = ["818A98","9FA5AD","BBBFC3"];
+    /* All template palette hex values */
+    var ALL_TMPL = {};
+    ["772ED1","C426D9","0D54F2","198617","CF480B","0D0DF2","167D99","917107",
+     "9E6ADE","CC45DE","477DF5","29D926","F2540D","7070F7","20B6DF","F4C325",
+     "1D8640","A26B0D","DB2424","2DD264","EC9C13","E24E4E",
+     "6B7584","6D7680","565B61","818A98","9FA5AD","BBBFC3"].forEach(function(c){ALL_TMPL[c]=true;});
 
-    /* New palette values */
-    var N_L_CAT = cur.categorical.map(function(s){return hx(s.lightHex);});
-    var N_D_CAT = cur.categorical.map(function(s){return hx(s.darkHex);});
-    var N_L_SPEC = cur.spectrum.map(function(s){return hx(s.lightHex);});
-    var N_D_SPEC = cur.spectrum.map(function(s){return hx(s.darkHex);});
-    var N_L_SEM = cur.semantic.map(function(s){return hx(s.lightHex);});
-    var N_D_SEM = cur.semantic.map(function(s){return hx(s.darkHex);});
-    var N_L_DEEM = cur.deemphasis.map(function(s){return hx(s.lightHex);});
-    var N_D_DEEM = cur.deemphasis.map(function(s){return hx(s.darkHex);});
-    var N_DARK = hx(darkStroke);
+    var NLC = cur.categorical.map(function(s){return hx(s.lightHex);});
+    var NDC = cur.categorical.map(function(s){return hx(s.darkHex);});
+    var NLS = cur.spectrum.map(function(s){return hx(s.lightHex);});
+    var NDS = cur.spectrum.map(function(s){return hx(s.darkHex);});
+    var NLSEM = cur.semantic.map(function(s){return hx(s.lightHex);});
+    var NDSEM = cur.semantic.map(function(s){return hx(s.darkHex);});
+    var NLDEEM = cur.deemphasis.map(function(s){return hx(s.lightHex);});
+    var NDDEEM = cur.deemphasis.map(function(s){return hx(s.darkHex);});
+    var NDARK = hx(darkStroke);
 
-    /* ── Process slide XML: ordinal counting by color type ── */
-    function processSlide(xml) {
-      var L_CS = {}; T_L_CAT.forEach(function(c){L_CS[c]=true;});
-      var D_CS = {}; T_D_CAT.forEach(function(c){D_CS[c]=true;});
-      var replacements = [];
+    /* Per-slide text label replacement sequences (from template analysis) */
+    var S1 = [].concat(NLC, NLS, NLDEEM, NLSEM, NLDEEM, NLSEM);
+    var S2 = [].concat(NDC, NDS, NDDEEM, NDSEM, NDDEEM, NDSEM);
+    var S3 = [].concat(NLDEEM, NLSEM, NDDEEM, NDSEM, NDC, NDS, NLC, NLS, NDDEEM, NDSEM, NLDEEM, NLSEM);
 
-      /* Process srgbClr val fills — L catspec and D catspec counted independently */
+    function processSlide(xml, slideMap) {
+      var textEntries = [];
+      var textRe = /#([A-F0-9]{6})/g;
+      var m;
+      while ((m = textRe.exec(xml)) !== null) {
+        if (ALL_TMPL[m[1]] && textEntries.length < slideMap.length) {
+          textEntries.push({pos: m.index + 1, len: 6, oldHex: m[1], newHex: slideMap[textEntries.length]});
+        }
+      }
+      var fillEntries = [];
       var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
-      var m, lIdx = 0, dIdx = 0;
       while ((m = fillRe.exec(xml)) !== null) {
-        if (L_CS[m[1]]) {
-          var nv = lIdx < 9 ? N_L_CAT[lIdx] : (lIdx < 18 ? N_L_SPEC[lIdx-9] : (lIdx < 27 ? N_L_CAT[lIdx-18] : N_L_SPEC[Math.min(lIdx-27,8)]));
-          replacements.push({pos: m.index + 14, len: 6, val: nv});
-          lIdx++;
-        } else if (D_CS[m[1]]) {
-          var nv2 = dIdx < 9 ? N_D_CAT[dIdx] : (dIdx < 18 ? N_D_SPEC[dIdx-9] : (dIdx < 27 ? N_D_CAT[dIdx-18] : N_D_SPEC[Math.min(dIdx-27,8)]));
-          replacements.push({pos: m.index + 14, len: 6, val: nv2});
-          dIdx++;
+        if (ALL_TMPL[m[1]]) {
+          var nearest = null, nearestDist = Infinity;
+          for (var t = 0; t < textEntries.length; t++) {
+            if (textEntries[t].oldHex === m[1]) {
+              var dist = Math.abs(m.index - textEntries[t].pos);
+              if (dist < nearestDist) { nearestDist = dist; nearest = textEntries[t]; }
+            }
+          }
+          if (nearest) { fillEntries.push({pos: m.index + 14, len: 6, newHex: nearest.newHex}); }
         }
       }
-
-      /* Process #HEXHEX text labels — same ordinal approach */
-      var txtRe = /#([A-F0-9]{6})/g;
-      var t; lIdx = 0; dIdx = 0;
-      while ((t = txtRe.exec(xml)) !== null) {
-        if (L_CS[t[1]]) {
-          var nt = lIdx < 9 ? N_L_CAT[lIdx] : (lIdx < 18 ? N_L_SPEC[lIdx-9] : (lIdx < 27 ? N_L_CAT[lIdx-18] : N_L_SPEC[Math.min(lIdx-27,8)]));
-          replacements.push({pos: t.index + 1, len: 6, val: nt});
-          lIdx++;
-        } else if (D_CS[t[1]]) {
-          var nt2 = dIdx < 9 ? N_D_CAT[dIdx] : (dIdx < 18 ? N_D_SPEC[dIdx-9] : (dIdx < 27 ? N_D_CAT[dIdx-18] : N_D_SPEC[Math.min(dIdx-27,8)]));
-          replacements.push({pos: t.index + 1, len: 6, val: nt2});
-          dIdx++;
-        }
+      var allR = textEntries.concat(fillEntries);
+      allR.sort(function(a, b) { return b.pos - a.pos; });
+      for (var r = 0; r < allR.length; r++) {
+        var rp = allR[r];
+        xml = xml.substring(0, rp.pos) + rp.newHex + xml.substring(rp.pos + rp.len);
       }
-
-      /* Apply positional replacements from end to start */
-      replacements.sort(function(a,b){return b.pos-a.pos;});
-      var chars = xml.split("");
-      for (var ri = 0; ri < replacements.length; ri++) {
-        var rp = replacements[ri];
-        chars.splice(rp.pos, rp.len, rp.val);
-      }
-      xml = chars.join("");
-
-      /* Global replace for semantic, deemphasis, dark bg (all unique) */
-      var uniqueMap = {};
-      for (var ui = 0; ui < 3; ui++) {
-        uniqueMap[T_L_SEM[ui]] = N_L_SEM[ui]; uniqueMap[T_D_SEM[ui]] = N_D_SEM[ui];
-        uniqueMap[T_L_DEEM[ui]] = N_L_DEEM[ui]; uniqueMap[T_D_DEEM[ui]] = N_D_DEEM[ui];
-      }
-      uniqueMap["000064"] = N_DARK; uniqueMap["000063"] = N_DARK;
-      for (var uk in uniqueMap) {
-        xml = xml.split('val="' + uk + '"').join('val="' + uniqueMap[uk] + '"');
-        xml = xml.split('val="' + uk.toLowerCase() + '"').join('val="' + uniqueMap[uk] + '"');
-        xml = xml.split("#" + uk).join("#" + uniqueMap[uk]);
-        xml = xml.split("#" + uk.toLowerCase()).join("#" + uniqueMap[uk]);
-      }
-
-      /* Text label replacements */
+      xml = xml.split('val="000064"').join('val="' + NDARK + '"');
+      xml = xml.split('val="000063"').join('val="' + NDARK + '"');
       xml = xml.split("HAP").join(brandName);
       xml = xml.split("Option 1").join("Option " + (activeOpt + 1));
       xml = xml.split("Option 2").join("Option " + (activeOpt + 1));
-      xml = xml.split("White outlines").join("L \u00B7 White Stroke");
-      xml = xml.split("Dark outlines").join("D \u00B7 Dark Stroke");
-      xml = xml.split("Option comparison").join(brandName + " Option " + (activeOpt + 1) + " Overview");
+      xml = xml.split("White outlines").join("L · White Stroke");
+      xml = xml.split("Dark outlines").join("D · Dark Stroke");
+      xml = xml.split("Darker colors with white").join("L colors with white");
+      xml = xml.split("Lighter colors with Dark").join("D colors with dark");
+      xml = xml.split("Option comparison").join(brandName + " · Opt " + (activeOpt + 1));
       return xml;
     }
 
-    /* ── Process chart XML: positional color replacement ── */
+    var L_TMPL = {"772ED1":0,"C426D9":1,"198617":3,"CF480B":4,"0D0DF2":5,"167D99":6,"917107":7,"0D54F2":2};
+    var D_TMPL = {"9E6ADE":0,"CC45DE":1,"477DF5":2,"29D926":3,"F2540D":4,"7070F7":5,"20B6DF":6,"F4C325":7};
+
     function processChart(xml) {
-      var hasL = false, hasD = false;
-      T_L_CAT.forEach(function(c){if(xml.indexOf('val="'+c+'"')>=0)hasL=true;});
-      T_D_CAT.forEach(function(c){if(xml.indexOf('val="'+c+'"')>=0)hasD=true;});
-
-      var tmplOrder = hasD ? T_D_CAT : T_L_CAT;
-      var newOrder = hasD ? N_D_CAT : N_L_CAT;
-      var palSet = {};
-      tmplOrder.forEach(function(c){palSet[c]=true;});
-
-      /* Count palette fills to determine if bar (8) or donut (9) */
-      var countRe = /srgbClr val="([A-F0-9]{6})"/g;
-      var cm, palCount = 0;
-      while ((cm = countRe.exec(xml)) !== null) { if (palSet[cm[1]]) palCount++; }
-
-      /* Bar charts (8 fills) skip position 7 (the duplicate), donut charts (9) have all */
-      var posMap = palCount >= 9 ? [0,1,2,3,4,5,6,7,8] : [0,1,2,3,4,5,6,8];
-
+      var isD = false;
+      ["9E6ADE","CC45DE","477DF5","29D926","F2540D","7070F7","20B6DF","F4C325"].forEach(function(c){if(xml.indexOf('val="'+c+'"')>=0) isD=true;});
+      var tmplMap = isD ? D_TMPL : L_TMPL;
+      var newCat = isD ? NDC : NLC;
+      var replacements = [];
       var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
-      var fm2, catIdx = 0;
-      var chartReplacements = [];
-      while ((fm2 = fillRe.exec(xml)) !== null) {
-        if (fm2[1] === "000064" || fm2[1] === "000063") {
-          chartReplacements.push({pos: fm2.index + 14, len: 6, val: N_DARK});
-        } else if (palSet[fm2[1]] && catIdx < posMap.length) {
-          chartReplacements.push({pos: fm2.index + 14, len: 6, val: newOrder[posMap[catIdx]]});
-          catIdx++;
+      var m2;
+      while ((m2 = fillRe.exec(xml)) !== null) {
+        if (m2[1] === "000064" || m2[1] === "000063") {
+          replacements.push({pos: m2.index + 14, len: 6, val: NDARK});
+        } else if (tmplMap[m2[1]] !== undefined) {
+          replacements.push({pos: m2.index + 14, len: 6, val: newCat[tmplMap[m2[1]]]});
         }
       }
-      chartReplacements.sort(function(a,b){return b.pos-a.pos;});
-      var ch = xml.split("");
-      for (var ci2 = 0; ci2 < chartReplacements.length; ci2++) {
-        var cr = chartReplacements[ci2];
-        ch.splice(cr.pos, cr.len, cr.val);
+      replacements.sort(function(a,b){return b.pos-a.pos;});
+      for (var ri = 0; ri < replacements.length; ri++) {
+        var rp = replacements[ri];
+        xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + rp.len);
       }
-      return ch.join("");
+      return xml;
     }
 
-    /* ── Process other XML (themes, etc.): global replace unique colors only ── */
     function processOther(xml) {
-      var uniqueMap2 = {};
-      for (var i = 0; i < 3; i++) {
-        uniqueMap2[T_L_SEM[i]] = N_L_SEM[i]; uniqueMap2[T_D_SEM[i]] = N_D_SEM[i];
-        uniqueMap2[T_L_DEEM[i]] = N_L_DEEM[i]; uniqueMap2[T_D_DEEM[i]] = N_D_DEEM[i];
-      }
-      uniqueMap2["000064"] = N_DARK; uniqueMap2["000063"] = N_DARK;
-      for (var k in uniqueMap2) {
-        xml = xml.split('val="'+k+'"').join('val="'+uniqueMap2[k]+'"');
-        xml = xml.split('val="'+k.toLowerCase()+'"').join('val="'+uniqueMap2[k]+'"');
-      }
+      xml = xml.split('val="000064"').join('val="' + NDARK + '"');
+      xml = xml.split('val="000063"').join('val="' + NDARK + '"');
       xml = xml.split("HAP").join(brandName);
       return xml;
     }
@@ -770,7 +722,9 @@ export default function App() {
       var promises = xmlFiles.map(function(path) {
         return zip.file(path).async("string").then(function(content) {
           var updated;
-          if (path.indexOf("ppt/slides/slide") >= 0) { updated = processSlide(content); }
+          if (path === "ppt/slides/slide1.xml") { updated = processSlide(content, S1); }
+          else if (path === "ppt/slides/slide2.xml") { updated = processSlide(content, S2); }
+          else if (path === "ppt/slides/slide3.xml") { updated = processSlide(content, S3); }
           else if (path.indexOf("ppt/charts/chart") >= 0) { updated = processChart(content); }
           else { updated = processOther(content); }
           zip.file(path, updated);
@@ -818,30 +772,31 @@ export default function App() {
       var idx=-1;
       for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
-      /* Snapshot all OTHER slots' hex values to verify we don't touch them */
       var otherHues=[]; var otherPairs=[];
       for(var j=0;j<slots.length;j++){if(j!==idx){otherHues.push(slots[j].hue);otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}}
-      /* Find a new distinct color */
       var s=slots[idx];
       var best=null, bestDist=0;
-      for(var attempt=0;attempt<60;attempt++){
-        var candidate=(s.hue+25+Math.floor(Math.random()*130))%360;
-        if(minHueDist(candidate,otherHues)<35) continue;
-        var satOpt=Math.min(90,Math.max(25,s.sat+Math.floor(Math.random()*30)-15));
-        var startL=Math.min(65,Math.max(30,50+Math.floor(Math.random()*20)-10));
+      for(var attempt=0;attempt<80;attempt++){
+        var candidate=(s.hue+30+Math.floor(Math.random()*300))%360;
+        if(minHueDist(candidate,otherHues)<30) continue;
+        var satOpt=Math.min(90,Math.max(20,s.sat+Math.floor(Math.random()*40)-20));
+        var startL=Math.min(70,Math.max(15,45+Math.floor(Math.random()*30)-15));
         var lHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),"#ffffff",4.5);
         var dHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),darkStroke,4.5);
         var p={lightHex:lHex,darkHex:dHex,hue:candidate,sat:satOpt};
         if(isDistinctEnough(p.lightHex,p.darkHex,otherPairs)){best={hue:candidate,sat:satOpt,pair:p};break;}
-        /* Track best by worst-case Delta E */
         var worstDE=Infinity;
         for(var k=0;k<otherPairs.length;k++){var dL=deltaE(p.lightHex,otherPairs[k].lightHex);var dD=deltaE(p.darkHex,otherPairs[k].darkHex);var w=Math.min(dL,dD);if(w<worstDE)worstDE=w;}
         if(worstDE>bestDist){bestDist=worstDE;best={hue:candidate,sat:satOpt,pair:p};}
       }
-      if(!best){best={hue:(s.hue+60)%360,sat:s.sat,pair:makePair((s.hue+60)%360,s.sat,darkStroke)};}
-      /* ONLY modify this one slot */
+      if(!best){
+        /* Fallback: find best hue with neighbor check */
+        var fbHue=(s.hue+60)%360;
+        if(minHueDist(fbHue,otherHues)<30) fbHue=(s.hue+120)%360;
+        if(minHueDist(fbHue,otherHues)<30) fbHue=(s.hue+180)%360;
+        best={hue:fbHue,sat:s.sat,pair:makePair(fbHue,s.sat,darkStroke)};
+      }
       slots[idx]={id:s.id, hue:best.hue, sat:best.sat, lightHex:best.pair.lightHex, darkHex:best.pair.darkHex, label:"H"+Math.round(best.hue)+"\u00B0", swapped:null};
-      /* Only rebuild spectrum if we changed a categorical slot */
       if(type==="categorical"){
         next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
       }
@@ -849,19 +804,24 @@ export default function App() {
     });
   },[darkStroke]);
 
-  /* Light shift: only changes ONE slot's saturation */
-  /* Tone variations: cycle through sat + lightness combos for more variety */
+  /* Tone cycle: wide variety of sat/lightness/hue combos with neighbor checking */
   var TONE_STEPS = [
-    {ds:0,dl:0},    /* original */
-    {ds:12,dl:5},   /* slightly more saturated, lighter */
-    {ds:-15,dl:-5},  /* desaturated, darker */
-    {ds:25,dl:0},   /* vivid */
-    {ds:-8,dl:10},   /* muted, lighter */
-    {ds:15,dl:-10},  /* saturated, darker */
-    {ds:-25,dl:8},   /* very muted, lighter */
-    {ds:30,dl:-8},   /* very vivid, darker */
-    {ds:-12,dl:-12}, /* muted, much darker */
-    {ds:8,dl:15},    /* slightly vivid, much lighter */
+    {ds:0, dl:0, dh:0},      /* original */
+    {ds:15, dl:8, dh:3},     /* vivid, lighter, slight hue shift */
+    {ds:-20, dl:-15, dh:-4},  /* muted, much darker */
+    {ds:30, dl:-5, dh:5},    /* very vivid, slightly dark */
+    {ds:-10, dl:15, dh:-3},   /* soft, lighter */
+    {ds:20, dl:-20, dh:6},   /* saturated, dark */
+    {ds:-30, dl:12, dh:-6},   /* very muted, lighter */
+    {ds:35, dl:-25, dh:4},   /* max vivid, very dark */
+    {ds:-15, dl:-28, dh:-5},  /* muted, very dark (like #000066) */
+    {ds:10, dl:20, dh:7},    /* slightly vivid, very light */
+    {ds:25, dl:-32, dh:-8},  /* vivid, extremely dark */
+    {ds:-35, dl:-8, dh:8},   /* very desaturated, dark */
+    {ds:5, dl:-18, dh:-7},   /* slight vivid, dark */
+    {ds:-5, dl:25, dh:5},    /* soft, very light */
+    {ds:40, dl:5, dh:-4},    /* max saturated, slightly light */
+    {ds:-25, dl:-22, dh:6},  /* muted, deep dark */
   ];
   var lightShift=useCallback(function(oi,type,sid){
     setOpts(function(prev){
@@ -872,15 +832,47 @@ export default function App() {
       for(var fi=0;fi<slots.length;fi++){if(slots[fi].id===sid){idx=fi;break;}}
       if(idx<0) return prev;
       var s=slots[idx];
-      /* Track which step we're on via a hidden counter */
-      var step=((s._toneStep||0)+1)%TONE_STEPS.length;
-      var t=TONE_STEPS[step];
       var baseSat=s._baseSat!=null?s._baseSat:s.sat;
-      var newSat=Math.min(90,Math.max(25,baseSat+t.ds));
-      var startL=Math.min(70,Math.max(25,50+t.dl));
-      var lightHex=adjustForContrast(hsl2hex(s.hue,newSat,startL),"#ffffff",4.5);
-      var darkHex=adjustForContrast(hsl2hex(s.hue,newSat,startL),darkStroke,4.5);
-      slots[idx]={id:s.id, hue:s.hue, sat:newSat, lightHex:lightHex, darkHex:darkHex, label:s.label, swapped:s.swapped, _toneStep:step, _baseSat:baseSat};
+      var baseHue=s._baseHue!=null?s._baseHue:s.hue;
+
+      /* Gather sibling colors for neighbor checking */
+      var otherPairs=[];
+      for(var j=0;j<slots.length;j++){if(j!==idx) otherPairs.push({lightHex:slots[j].lightHex,darkHex:slots[j].darkHex});}
+
+      /* Try steps starting from current, find the next one that passes neighbor check */
+      var startStep=((s._toneStep||0)+1)%TONE_STEPS.length;
+      var found=false;
+      for(var tries=0;tries<TONE_STEPS.length;tries++){
+        var step=(startStep+tries)%TONE_STEPS.length;
+        var t=TONE_STEPS[step];
+        var newHue=(baseHue+t.dh+360)%360;
+        var newSat=Math.min(95,Math.max(15,baseSat+t.ds));
+        var startL=Math.min(75,Math.max(12,50+t.dl));
+        var lightHex=adjustForContrast(hsl2hex(newHue,newSat,startL),"#ffffff",4.5);
+        var darkHex=adjustForContrast(hsl2hex(newHue,newSat,startL),darkStroke,4.5);
+
+        /* Check if result is distinct enough from siblings */
+        var tooClose=false;
+        for(var k=0;k<otherPairs.length;k++){
+          if(deltaE(lightHex,otherPairs[k].lightHex)<22 || deltaE(darkHex,otherPairs[k].darkHex)<22){tooClose=true;break;}
+        }
+        if(!tooClose){
+          slots[idx]={id:s.id, hue:newHue, sat:newSat, lightHex:lightHex, darkHex:darkHex, label:s.label, swapped:s.swapped, _toneStep:step, _baseSat:baseSat, _baseHue:baseHue};
+          found=true;
+          break;
+        }
+      }
+      /* If nothing passed, use the next step anyway (better than no change) */
+      if(!found){
+        var step2=startStep;
+        var t2=TONE_STEPS[step2];
+        var newHue2=(baseHue+t2.dh+360)%360;
+        var newSat2=Math.min(95,Math.max(15,baseSat+t2.ds));
+        var startL2=Math.min(75,Math.max(12,50+t2.dl));
+        var lightHex2=adjustForContrast(hsl2hex(newHue2,newSat2,startL2),"#ffffff",4.5);
+        var darkHex2=adjustForContrast(hsl2hex(newHue2,newSat2,startL2),darkStroke,4.5);
+        slots[idx]={id:s.id, hue:newHue2, sat:newSat2, lightHex:lightHex2, darkHex:darkHex2, label:s.label, swapped:s.swapped, _toneStep:step2, _baseSat:baseSat, _baseHue:baseHue};
+      }
       if(type==="categorical"){
         next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
       }
@@ -899,7 +891,30 @@ export default function App() {
       if(idx<0) return prev;
       var s=slots[idx];
       var startHex=hsl2hex(newH,newS,newL);
-      slots[idx]={id:s.id, hue:newH, sat:newS, lightHex:adjustForContrast(startHex,"#ffffff",4.5), darkHex:adjustForContrast(startHex,darkStroke,4.5), label:"H"+Math.round(newH)+"\u00B0", swapped:null};
+      var newLightHex=adjustForContrast(startHex,"#ffffff",4.5);
+      var newDarkHex=adjustForContrast(startHex,darkStroke,4.5);
+      slots[idx]={id:s.id, hue:newH, sat:newS, lightHex:newLightHex, darkHex:newDarkHex, label:"H"+Math.round(newH)+"\u00B0", swapped:null};
+
+      /* Auto-fix any siblings that are now too close to the user's chosen color */
+      var conflicts=[];
+      for(var ci=0;ci<slots.length;ci++){
+        if(ci===idx) continue;
+        var dL=deltaE(newLightHex,slots[ci].lightHex);
+        var dD=deltaE(newDarkHex,slots[ci].darkHex);
+        var hd=hueDist(newH,slots[ci].hue);
+        if(dL<22||dD<22||hd<25) conflicts.push(ci);
+      }
+      /* Re-roll each conflicting sibling */
+      for(var cc=0;cc<conflicts.length;cc++){
+        var cIdx=conflicts[cc];
+        var others=[]; var otherH=[];
+        for(var ri=0;ri<slots.length;ri++){
+          if(ri!==cIdx){others.push({lightHex:slots[ri].lightHex,darkHex:slots[ri].darkHex});otherH.push(slots[ri].hue);}
+        }
+        var fix=findDistinctColor(slots[cIdx].hue,slots[cIdx].sat,others,otherH,darkStroke);
+        slots[cIdx]={id:slots[cIdx].id, hue:fix.hue, sat:fix.sat, lightHex:fix.pair.lightHex, darkHex:fix.pair.darkHex, label:"H"+Math.round(fix.hue)+"\u00B0", swapped:null};
+      }
+
       if(type==="categorical"){
         next[oi].spectrum=next[oi].categorical.slice().sort(function(a,b){return a.hue-b.hue;});
       }
