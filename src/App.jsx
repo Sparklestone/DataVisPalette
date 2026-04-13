@@ -81,7 +81,8 @@ function minDeltaE(hex, others) {
   return minD;
 }
 
-var MIN_DE = 28; /* minimum Delta E for "clearly different" — 28+ ensures no ambiguity */
+var MIN_DE = 28; /* minimum Delta E for perceptual distinction */
+var MIN_HUE_GLOBAL = 35; /* minimum hue distance between any two palette colors */
 
 /* Check if a candidate color is distinct enough from all existing colors */
 function isDistinctEnough(candidateL, candidateD, existingPairs) {
@@ -94,7 +95,7 @@ function isDistinctEnough(candidateL, candidateD, existingPairs) {
 
 /* Find a hue+sat combo that produces visually distinct L and D colors */
 function findDistinctColor(startHue, startSat, existingPairs, existingHues, darkBg) {
-  var MIN_HUE = 25;
+  var MIN_HUE = 35;
   /* Try the start hue first */
   if (minHueDist(startHue, existingHues) >= MIN_HUE) {
     var pair = makePair(startHue, startSat, darkBg);
@@ -102,27 +103,25 @@ function findDistinctColor(startHue, startSat, existingPairs, existingHues, dark
       return { hue: startHue, sat: startSat, pair: pair };
     }
   }
-  /* Systematic search: vary hue, saturation, AND starting lightness */
-  var satOffsets = [0, 15, -15, 30, -30, 40, -40];
-  var lightOffsets = [0, 8, -8, 15, -15];
+  /* Systematic search: PHASE 1 — stay very close to start hue (±8°), vary sat/lightness aggressively */
+  var satOffsets = [0, 12, -12, 25, -25, 38, -38, 50, -50];
+  var lightOffsets = [0, 6, -6, 12, -12, 18, -18, 24, -24];
   var bestCandidate = null, bestScore = 0;
-  for (var offset = 3; offset < 360; offset += 3) {
+  for (var offset = 0; offset < 9; offset += 3) {
     for (var si = 0; si < satOffsets.length; si++) {
       var sat = Math.min(90, Math.max(25, startSat + satOffsets[si]));
       for (var li = 0; li < lightOffsets.length; li++) {
-        var startL = Math.min(65, Math.max(30, 50 + lightOffsets[li]));
-        var candidates = [(startHue + offset) % 360, (startHue - offset + 360) % 360];
+        var startL = Math.min(70, Math.max(25, 50 + lightOffsets[li]));
+        var candidates = offset === 0 ? [startHue] : [(startHue + offset) % 360, (startHue - offset + 360) % 360];
         for (var ci = 0; ci < candidates.length; ci++) {
           var h = candidates[ci];
           if (minHueDist(h, existingHues) < MIN_HUE) continue;
-          /* Build pair with custom starting lightness */
           var lHex = adjustForContrast(hsl2hex(h, sat, startL), "#ffffff", 4.5);
           var dHex = adjustForContrast(hsl2hex(h, sat, startL), darkBg || "#121212", 4.5);
           var p = { lightHex: lHex, darkHex: dHex, hue: h, sat: sat };
           if (isDistinctEnough(p.lightHex, p.darkHex, existingPairs)) {
             return { hue: h, sat: sat, pair: p };
           }
-          /* Track best-so-far by minimum Delta E across all pairs */
           var worstDE = Infinity;
           for (var k = 0; k < existingPairs.length; k++) {
             var dL = deltaE(p.lightHex, existingPairs[k].lightHex);
@@ -135,6 +134,34 @@ function findDistinctColor(startHue, startSat, existingPairs, existingHues, dark
       }
     }
   }
+  /* PHASE 2 — wider hue search if Phase 1 didn't find a perfect match */
+  for (var offset2 = 9; offset2 < 360; offset2 += 3) {
+    for (var si2 = 0; si2 < satOffsets.length; si2++) {
+      var sat2 = Math.min(90, Math.max(25, startSat + satOffsets[si2]));
+      for (var li2 = 0; li2 < lightOffsets.length; li2++) {
+        var startL2 = Math.min(70, Math.max(25, 50 + lightOffsets[li2]));
+        var cands2 = [(startHue + offset2) % 360, (startHue - offset2 + 360) % 360];
+        for (var ci2 = 0; ci2 < cands2.length; ci2++) {
+          var h2 = cands2[ci2];
+          if (minHueDist(h2, existingHues) < MIN_HUE) continue;
+          var lHex2 = adjustForContrast(hsl2hex(h2, sat2, startL2), "#ffffff", 4.5);
+          var dHex2 = adjustForContrast(hsl2hex(h2, sat2, startL2), darkBg || "#121212", 4.5);
+          var p2 = { lightHex: lHex2, darkHex: dHex2, hue: h2, sat: sat2 };
+          if (isDistinctEnough(p2.lightHex, p2.darkHex, existingPairs)) {
+            return { hue: h2, sat: sat2, pair: p2 };
+          }
+          var worstDE2 = Infinity;
+          for (var k2 = 0; k2 < existingPairs.length; k2++) {
+            var dL2 = deltaE(p2.lightHex, existingPairs[k2].lightHex);
+            var dD2 = deltaE(p2.darkHex, existingPairs[k2].darkHex);
+            var worst2 = Math.min(dL2, dD2);
+            if (worst2 < worstDE2) worstDE2 = worst2;
+          }
+          if (worstDE2 > bestScore) { bestScore = worstDE2; bestCandidate = { hue: h2, sat: sat2, pair: p2 }; }
+        }
+      }
+    }
+  }
   if (bestCandidate) return bestCandidate;
   var fp = makePair(startHue, startSat, darkBg);
   return { hue: startHue, sat: startSat, pair: fp };
@@ -142,9 +169,10 @@ function findDistinctColor(startHue, startSat, existingPairs, existingHues, dark
 
 /* ═══ BASE HUE SETS — 3 distinct options ═══ */
 var OPT_HUES = [
-  [{hue:215,sat:75,label:"Blue"},{hue:180,sat:70,label:"Teal"},{hue:30,sat:80,label:"Orange"},{hue:0,sat:70,label:"Red"},{hue:280,sat:60,label:"Purple"},{hue:145,sat:65,label:"Green"},{hue:50,sat:75,label:"Gold"},{hue:320,sat:55,label:"Magenta"},{hue:245,sat:55,label:"Indigo"}],
-  [{hue:10,sat:72,label:"Coral"},{hue:160,sat:60,label:"Seafoam"},{hue:42,sat:82,label:"Amber"},{hue:340,sat:65,label:"Rose"},{hue:260,sat:55,label:"Violet"},{hue:120,sat:55,label:"Emerald"},{hue:70,sat:70,label:"Lime"},{hue:195,sat:65,label:"Cyan"},{hue:300,sat:50,label:"Orchid"}],
-  [{hue:230,sat:65,label:"Navy"},{hue:165,sat:50,label:"Sage"},{hue:20,sat:70,label:"Terracotta"},{hue:350,sat:60,label:"Crimson"},{hue:290,sat:50,label:"Plum"},{hue:100,sat:55,label:"Moss"},{hue:55,sat:65,label:"Mustard"},{hue:200,sat:60,label:"Steel"},{hue:270,sat:45,label:"Lavender"}],
+  /* Exactly 40° spacing — each option offset by ~13° for distinct sets */
+  [{hue:5,sat:70,label:"Red"},{hue:45,sat:80,label:"Orange"},{hue:85,sat:72,label:"Gold"},{hue:125,sat:65,label:"Green"},{hue:165,sat:68,label:"Teal"},{hue:205,sat:75,label:"Blue"},{hue:245,sat:58,label:"Indigo"},{hue:285,sat:58,label:"Purple"},{hue:325,sat:55,label:"Magenta"}],
+  [{hue:13,sat:72,label:"Coral"},{hue:53,sat:78,label:"Amber"},{hue:93,sat:58,label:"Lime"},{hue:133,sat:60,label:"Emerald"},{hue:173,sat:65,label:"Seafoam"},{hue:213,sat:68,label:"Cyan"},{hue:253,sat:55,label:"Violet"},{hue:293,sat:50,label:"Orchid"},{hue:333,sat:62,label:"Rose"}],
+  [{hue:27,sat:70,label:"Terracotta"},{hue:67,sat:65,label:"Mustard"},{hue:107,sat:55,label:"Moss"},{hue:147,sat:52,label:"Sage"},{hue:187,sat:62,label:"Steel"},{hue:227,sat:65,label:"Navy"},{hue:267,sat:48,label:"Lavender"},{hue:307,sat:52,label:"Plum"},{hue:347,sat:60,label:"Crimson"}],
 ];
 var SEM_BASES = [{hue:140,sat:65,label:"Success"},{hue:38,sat:85,label:"Warning"},{hue:0,sat:72,label:"Error"}];
 var DEEM_OPT = [
@@ -169,12 +197,12 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
     /* Greedily pick the most distinct ones */
     if (saturated.length > 0) {
       usableBrand.push(saturated[0]);
-      for (var si = 1; si < saturated.length && usableBrand.length < 4; si++) {
+      for (var si = 1; si < saturated.length && usableBrand.length < 3; si++) {
         var distinct = true;
         for (var ui = 0; ui < usableBrand.length; ui++) {
           /* Check both hue distance AND perceptual distance of the raw brand colors */
-          if (hueDist(saturated[si].hue, usableBrand[ui].hue) < 40) { distinct = false; break; }
-          if (deltaE(saturated[si].hex, usableBrand[ui].hex) < 30) { distinct = false; break; }
+          if (hueDist(saturated[si].hue, usableBrand[ui].hue) < 55) { distinct = false; break; }
+          if (deltaE(saturated[si].hex, usableBrand[ui].hex) < 40) { distinct = false; break; }
         }
         if (distinct) usableBrand.push(saturated[si]);
       }
@@ -217,27 +245,44 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
     return {id:i, hue:hue, sat:pair.sat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:swapped?"~"+swapped:base.label, swapped:swapped};
   });
 
-  /* STEP 3: POST-GENERATION VERIFICATION — re-roll any color too close to a neighbor */
-  for (var pass = 0; pass < 8; pass++) {
-    var worstIdx = -1, worstDE = Infinity;
+  /* STEP 3: POST-GENERATION VERIFICATION — re-roll any color too close in hue OR Delta E */
+  for (var pass = 0; pass < 12; pass++) {
+    var worstA = -1, worstB = -1, worstScore = Infinity;
     for (var ai = 0; ai < cat.length; ai++) {
       for (var bi2 = ai + 1; bi2 < cat.length; bi2++) {
         var dL = deltaE(cat[ai].lightHex, cat[bi2].lightHex);
         var dD = deltaE(cat[ai].darkHex, cat[bi2].darkHex);
-        var worst = Math.min(dL, dD);
-        if (worst < MIN_DE && worst < worstDE) {
-          worstDE = worst;
-          worstIdx = bi2;
+        var hd = hueDist(cat[ai].hue, cat[bi2].hue);
+        var deWorst = Math.min(dL, dD);
+        var failed = (hd < MIN_HUE_GLOBAL) || (deWorst < MIN_DE);
+        if (failed) {
+          var score = hd / MIN_HUE_GLOBAL + deWorst / MIN_DE;
+          if (score < worstScore) { worstScore = score; worstA = ai; worstB = bi2; }
         }
       }
     }
-    if (worstIdx < 0) break;
-    var others = []; var otherH = [];
-    for (var ri = 0; ri < cat.length; ri++) {
-      if (ri !== worstIdx) { others.push({ lightHex: cat[ri].lightHex, darkHex: cat[ri].darkHex }); otherH.push(cat[ri].hue); }
+    if (worstA < 0) break;
+
+    /* Try re-rolling BOTH colors, keep the better result */
+    function tryReroll(idx) {
+      var others = []; var otherH = [];
+      for (var ri = 0; ri < cat.length; ri++) {
+        if (ri !== idx) { others.push({ lightHex: cat[ri].lightHex, darkHex: cat[ri].darkHex }); otherH.push(cat[ri].hue); }
+      }
+      var fix = findDistinctColor(cat[idx].hue, cat[idx].sat, others, otherH, darkBg);
+      /* Score the result: min ΔE and min hue against all others */
+      var minDE = Infinity, minHD2 = Infinity;
+      for (var ri2 = 0; ri2 < cat.length; ri2++) {
+        if (ri2 === idx) continue;
+        minDE = Math.min(minDE, deltaE(fix.pair.lightHex, cat[ri2].lightHex), deltaE(fix.pair.darkHex, cat[ri2].darkHex));
+        minHD2 = Math.min(minHD2, hueDist(fix.hue, cat[ri2].hue));
+      }
+      return { fix: fix, minDE: minDE, minHD: minHD2, combined: minDE / MIN_DE + minHD2 / MIN_HUE_GLOBAL };
     }
-    var fix = findDistinctColor(cat[worstIdx].hue, cat[worstIdx].sat, others, otherH, darkBg);
-    cat[worstIdx] = { id: cat[worstIdx].id, hue: fix.hue, sat: fix.sat, lightHex: fix.pair.lightHex, darkHex: fix.pair.darkHex, label: "H" + Math.round(fix.hue) + "\u00B0", swapped: null };
+    var resultA = tryReroll(worstA);
+    var resultB = tryReroll(worstB);
+    var best = resultA.combined >= resultB.combined ? { idx: worstA, fix: resultA.fix } : { idx: worstB, fix: resultB.fix };
+    cat[best.idx] = { id: cat[best.idx].id, hue: best.fix.hue, sat: best.fix.sat, lightHex: best.fix.pair.lightHex, darkHex: best.fix.pair.darkHex, label: "H" + Math.round(best.fix.hue) + "\u00B0", swapped: null };
   }
 
   var sem = SEM_BASES.map(function(base,i) { var pair=makePair(base.hue,base.sat,darkBg); return {id:i,hue:base.hue,sat:pair.sat,lightHex:pair.lightHex,darkHex:pair.darkHex,label:base.label}; });
@@ -387,35 +432,42 @@ function OptionPanel(props) {
 
 /* ═══ COLOR DETAIL MODAL ═══ */
 function ColorDetail(props) {
-  var info=props.info,onClose=props.onClose,onSetHSL=props.onSetHSL;
+  var info=props.info,onClose=props.onClose,onSetHSL=props.onSetHSL,brandColors=props.brandColors||[];
+  var _pending=useState(null); var pending=_pending[0],setPending=_pending[1];
   if(!info) return null;
-  var rgb=h2r(info.hex); var hsl=r2hsl(rgb.r,rgb.g,rgb.b); var cmyk=r2cmyk(rgb.r,rgb.g,rgb.b);
-  var p=findPMS(info.hex); var cw=CR(info.hex,"#ffffff").toFixed(2); var cd=CR(info.hex,"#121212").toFixed(2);
+  var displayHex=pending||info.hex;
+  var rgb=h2r(displayHex); var hsl=r2hsl(rgb.r,rgb.g,rgb.b); var cmyk=r2cmyk(rgb.r,rgb.g,rgb.b);
+  var p=findPMS(displayHex); var cw=CR(displayHex,"#ffffff").toFixed(2); var cd=CR(displayHex,"#121212").toFixed(2);
   var ll=getLum(rgb.r,rgb.g,rgb.b); var fg=ll>0.35?"#111":"#fff";
   function Badge(bp){var nn=parseFloat(bp.v);var lv=nn>=7?"AAA":nn>=4.5?"AA":"Fail";var bg=nn>=4.5?"#1a7a3d":"#c42b2b";return (<span style={{fontSize:12,fontWeight:700,color:"#fff",backgroundColor:bg,padding:"1px 5px",borderRadius:3,marginLeft:4}}>{lv} {bp.v}</span>);}
-  function handleColorPick(e){
-    if(onSetHSL&&info.slotType!=null&&info.slotId!=null){
-      var newHsl=hex2hsl(e.target.value);
+  function handleColorInput(e){setPending(e.target.value);}
+  function selectBrandColor(hex){setPending(hex);}
+  function applyColor(){
+    if(pending&&onSetHSL&&info.slotType!=null&&info.slotId!=null){
+      var newHsl=hex2hsl(pending);
       onSetHSL(info.slotType,info.slotId,Math.round(newHsl.h),Math.round(newHsl.s),Math.round(newHsl.l));
-      onClose();
     }
+    onClose();
   }
+  function cancelEdit(){setPending(null);onClose();}
   var canEdit=onSetHSL&&info.slotType!=null&&info.slotId!=null;
+  var isEditing=pending!==null;
   return (
-    <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={onClose}>
+    <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={cancelEdit}>
       <div style={{backgroundColor:"#fff",borderRadius:14,maxWidth:340,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
-        <div style={{height:110,backgroundColor:info.hex,color:fg,position:"relative",display:"flex",alignItems:"flex-end",padding:14}}>
-          {info.onHue&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Shift hue"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
-          {info.onLight&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle tone"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+        <div style={{height:110,backgroundColor:displayHex,color:fg,position:"relative",display:"flex",alignItems:"flex-end",padding:14}}>
+          {info.onHue&&!isEditing&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Shift hue"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
+          {info.onLight&&!isEditing&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle tone"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
           {canEdit&&(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:36,height:36,borderRadius:18,backgroundColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",border:"none"}}>
-            <input type="color" value={info.hex} onChange={handleColorPick} style={{position:"absolute",inset:-6,width:"150%",height:"150%",cursor:"pointer",opacity:0}} />
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round"><path d="M12 1l3 3-9 9H3v-3z"/><path d="M10 3l3 3"/></svg>
+            <input type="color" value={displayHex} onChange={handleColorInput} style={{position:"absolute",inset:-6,width:"150%",height:"150%",cursor:"pointer",opacity:0}} />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={fg} strokeOpacity="0.5" strokeWidth="1.5" strokeLinecap="round"><path d="M12 1l3 3-9 9H3v-3z"/><path d="M10 3l3 3"/></svg>
           </div>)}
           <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,letterSpacing:"0.06em"}}>{info.label||"Color"}</div>
         </div>
         <div style={{padding:14}}>
+          {/* Color values */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontFamily:"'Space Mono',monospace",fontSize:14,marginBottom:10}}>
-            <div><span style={{color:"#777"}}>HEX</span><br /><b>{info.hex.toUpperCase()}</b></div>
+            <div><span style={{color:"#777"}}>HEX</span><br /><b>{displayHex.toUpperCase()}</b></div>
             <div><span style={{color:"#777"}}>RGB</span><br /><b>{rgb.r},{rgb.g},{rgb.b}</b></div>
             <div><span style={{color:"#777"}}>HSL</span><br /><b>{Math.round(hsl.h)}&deg; {Math.round(hsl.s)}% {Math.round(hsl.l)}%</b></div>
             <div><span style={{color:"#777"}}>CMYK</span><br /><b>{cmyk.c}/{cmyk.m}/{cmyk.y}/{cmyk.k}</b></div>
@@ -425,7 +477,23 @@ function ColorDetail(props) {
             <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#666",width:50,fontFamily:"'Space Mono',monospace"}}>White</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cw}</span><Badge v={cw} /></div>
             <div style={{display:"flex",alignItems:"center"}}><span style={{fontSize:13,color:"#666",width:50,fontFamily:"'Space Mono',monospace"}}>Dark</span><span style={{fontSize:16,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{cd}</span><Badge v={cd} /></div>
           </div>
-          <button onClick={onClose} style={{width:"100%",padding:7,borderRadius:6,border:"none",backgroundColor:"#222",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginTop:10}}>Close</button>
+          {/* Brand color swatches for quick pick */}
+          {canEdit&&brandColors.length>0&&(<div style={{borderTop:"1px solid #eee",paddingTop:8,marginTop:8}}>
+            <span style={{fontSize:10,fontFamily:"'Space Mono',monospace",color:"#777",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:5}}>Brand Colors</span>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{brandColors.map(function(c,i){
+              var isActive=displayHex.toLowerCase()===c.hex.toLowerCase();
+              return (<div key={i} onClick={function(){selectBrandColor(c.hex);}} style={{width:28,height:28,borderRadius:5,backgroundColor:c.hex,border:isActive?"2px solid #ff8800":"1.5px solid #ddd",cursor:"pointer",boxSizing:"border-box"}} title={c.name+" "+c.hex} />);
+            })}</div>
+          </div>)}
+          {/* OK / Cancel when editing, or just Close */}
+          {isEditing ? (
+            <div style={{display:"flex",gap:6,marginTop:10}}>
+              <button onClick={applyColor} style={{flex:1,padding:7,borderRadius:6,border:"none",backgroundColor:"#1a7a3d",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>OK</button>
+              <button onClick={cancelEdit} style={{flex:1,padding:7,borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontWeight:700,fontSize:15,cursor:"pointer"}}>Cancel</button>
+            </div>
+          ) : (
+            <button onClick={onClose} style={{width:"100%",padding:7,borderRadius:6,border:"none",backgroundColor:"#222",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginTop:10}}>Close</button>
+          )}
         </div>
       </div>
     </div>
@@ -476,7 +544,7 @@ function CompareView(props) {
           })}
         </div>
       </div>
-      {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} />}
+      {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} brandColors={brandColors} />}
     </div>
   );
 }
@@ -545,50 +613,148 @@ export default function App() {
     var brandName = activeBrand ? brands[activeBrand].name : "Generic";
     var hx = function(hex) { return hex.replace("#","").toUpperCase(); };
 
-    /* Template color map — these are the HAP colors in the template file */
-    var TMPL_L_CAT = ["0D0DF2","078465","CF480B","D92641","AB49D1","0F8835","897614","DB0C99","3974C6"];
-    var TMPL_D_CAT = ["7070F7","0DF2BA","F2540D","E05065","BD70DB","19E65A","DFBF20","F20DA9","5185CD"];
-    var TMPL_L_SEM = ["1D8640","A26B0D","DB2424"];
-    var TMPL_D_SEM = ["2DD264","EC9C13","E24E4E"];
-    var TMPL_L_DEEM = ["6B7584","6D7680","565B61"];
-    var TMPL_D_DEEM = ["818A98","9FA5AD","BBBFC3"];
-    var TMPL_DARK_BG = "000064";
-    /* Also colors used once in charts/misc */
-    var TMPL_EXTRAS = ["F9550B","DB0196","C35701","7D50AB","1464B8","01A47C","000063","D3D3D3","BBBBBB","A5A5A5","585858"];
+    /* Template color map — HAP colors in Opt1-3 template, ALL 9 positions including duplicate */
+    var T_L_CAT = ["772ED1","C426D9","0D54F2","198617","CF480B","0D0DF2","167D99","772ED1","917107"];
+    var T_D_CAT = ["9E6ADE","CC45DE","477DF5","29D926","F2540D","7070F7","20B6DF","9E6ADE","F4C325"];
+    var T_L_SPEC = ["0D54F2","167D99","0D0DF2","C426D9","917107","772ED1","CF480B","772ED1","198617"];
+    var T_D_SPEC = ["477DF5","20B6DF","7070F7","CC45DE","F4C325","9E6ADE","F2540D","9E6ADE","29D926"];
+    var T_L_SEM = ["1D8640","A26B0D","DB2424"];
+    var T_D_SEM = ["2DD264","EC9C13","E24E4E"];
+    var T_L_DEEM = ["6B7584","6D7680","565B61"];
+    var T_D_DEEM = ["818A98","9FA5AD","BBBFC3"];
 
-    /* Build replacement map: template color → new color */
-    var map = {};
-    for (var ci = 0; ci < 9; ci++) {
-      map[TMPL_L_CAT[ci]] = hx(cur.categorical[ci].lightHex);
-      map[TMPL_D_CAT[ci]] = hx(cur.categorical[ci].darkHex);
-    }
-    for (var si = 0; si < 3; si++) {
-      map[TMPL_L_SEM[si]] = hx(cur.semantic[si].lightHex);
-      map[TMPL_D_SEM[si]] = hx(cur.semantic[si].darkHex);
-      map[TMPL_L_DEEM[si]] = hx(cur.deemphasis[si].lightHex);
-      map[TMPL_D_DEEM[si]] = hx(cur.deemphasis[si].darkHex);
-    }
-    map[TMPL_DARK_BG] = hx(darkStroke);
-    /* Map the extra "000063" too (off by one from dark bg) */
-    map["000063"] = hx(darkStroke);
+    /* New palette values */
+    var N_L_CAT = cur.categorical.map(function(s){return hx(s.lightHex);});
+    var N_D_CAT = cur.categorical.map(function(s){return hx(s.darkHex);});
+    var N_L_SPEC = cur.spectrum.map(function(s){return hx(s.lightHex);});
+    var N_D_SPEC = cur.spectrum.map(function(s){return hx(s.darkHex);});
+    var N_L_SEM = cur.semantic.map(function(s){return hx(s.lightHex);});
+    var N_D_SEM = cur.semantic.map(function(s){return hx(s.darkHex);});
+    var N_L_DEEM = cur.deemphasis.map(function(s){return hx(s.lightHex);});
+    var N_D_DEEM = cur.deemphasis.map(function(s){return hx(s.darkHex);});
+    var N_DARK = hx(darkStroke);
 
-    /* Sort keys by length descending to avoid partial matches */
-    var sortedKeys = Object.keys(map).sort(function(a,b) { return b.length - a.length; });
+    /* ── Process slide XML: ordinal counting by color type ── */
+    function processSlide(xml) {
+      var L_CS = {}; T_L_CAT.forEach(function(c){L_CS[c]=true;});
+      var D_CS = {}; T_D_CAT.forEach(function(c){D_CS[c]=true;});
+      var replacements = [];
 
-    function replaceColors(xml) {
-      /* Replace brand name */
-      xml = xml.split("HAP").join(brandName);
-      /* Replace hex text labels like #0D0DF2 shown on slides */
-      for (var ki = 0; ki < sortedKeys.length; ki++) {
-        var old = sortedKeys[ki];
-        var nw = map[old];
-        /* Replace in srgbClr val attributes (shape fills, chart colors) */
-        xml = xml.split('val="' + old + '"').join('val="' + nw + '"');
-        xml = xml.split('val="' + old.toLowerCase() + '"').join('val="' + nw + '"');
-        /* Replace hex text labels shown on slides (e.g. #0D0DF2) */
-        xml = xml.split("#" + old).join("#" + nw);
-        xml = xml.split("#" + old.toLowerCase()).join("#" + nw);
+      /* Process srgbClr val fills — L catspec and D catspec counted independently */
+      var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
+      var m, lIdx = 0, dIdx = 0;
+      while ((m = fillRe.exec(xml)) !== null) {
+        if (L_CS[m[1]]) {
+          var nv = lIdx < 9 ? N_L_CAT[lIdx] : (lIdx < 18 ? N_L_SPEC[lIdx-9] : (lIdx < 27 ? N_L_CAT[lIdx-18] : N_L_SPEC[Math.min(lIdx-27,8)]));
+          replacements.push({pos: m.index + 14, len: 6, val: nv});
+          lIdx++;
+        } else if (D_CS[m[1]]) {
+          var nv2 = dIdx < 9 ? N_D_CAT[dIdx] : (dIdx < 18 ? N_D_SPEC[dIdx-9] : (dIdx < 27 ? N_D_CAT[dIdx-18] : N_D_SPEC[Math.min(dIdx-27,8)]));
+          replacements.push({pos: m.index + 14, len: 6, val: nv2});
+          dIdx++;
+        }
       }
+
+      /* Process #HEXHEX text labels — same ordinal approach */
+      var txtRe = /#([A-F0-9]{6})/g;
+      var t; lIdx = 0; dIdx = 0;
+      while ((t = txtRe.exec(xml)) !== null) {
+        if (L_CS[t[1]]) {
+          var nt = lIdx < 9 ? N_L_CAT[lIdx] : (lIdx < 18 ? N_L_SPEC[lIdx-9] : (lIdx < 27 ? N_L_CAT[lIdx-18] : N_L_SPEC[Math.min(lIdx-27,8)]));
+          replacements.push({pos: t.index + 1, len: 6, val: nt});
+          lIdx++;
+        } else if (D_CS[t[1]]) {
+          var nt2 = dIdx < 9 ? N_D_CAT[dIdx] : (dIdx < 18 ? N_D_SPEC[dIdx-9] : (dIdx < 27 ? N_D_CAT[dIdx-18] : N_D_SPEC[Math.min(dIdx-27,8)]));
+          replacements.push({pos: t.index + 1, len: 6, val: nt2});
+          dIdx++;
+        }
+      }
+
+      /* Apply positional replacements from end to start */
+      replacements.sort(function(a,b){return b.pos-a.pos;});
+      var chars = xml.split("");
+      for (var ri = 0; ri < replacements.length; ri++) {
+        var rp = replacements[ri];
+        chars.splice(rp.pos, rp.len, rp.val);
+      }
+      xml = chars.join("");
+
+      /* Global replace for semantic, deemphasis, dark bg (all unique) */
+      var uniqueMap = {};
+      for (var ui = 0; ui < 3; ui++) {
+        uniqueMap[T_L_SEM[ui]] = N_L_SEM[ui]; uniqueMap[T_D_SEM[ui]] = N_D_SEM[ui];
+        uniqueMap[T_L_DEEM[ui]] = N_L_DEEM[ui]; uniqueMap[T_D_DEEM[ui]] = N_D_DEEM[ui];
+      }
+      uniqueMap["000064"] = N_DARK; uniqueMap["000063"] = N_DARK;
+      for (var uk in uniqueMap) {
+        xml = xml.split('val="' + uk + '"').join('val="' + uniqueMap[uk] + '"');
+        xml = xml.split('val="' + uk.toLowerCase() + '"').join('val="' + uniqueMap[uk] + '"');
+        xml = xml.split("#" + uk).join("#" + uniqueMap[uk]);
+        xml = xml.split("#" + uk.toLowerCase()).join("#" + uniqueMap[uk]);
+      }
+
+      /* Text label replacements */
+      xml = xml.split("HAP").join(brandName);
+      xml = xml.split("Option 1").join("Option " + (activeOpt + 1));
+      xml = xml.split("Option 2").join("Option " + (activeOpt + 1));
+      xml = xml.split("White outlines").join("L \u00B7 White Stroke");
+      xml = xml.split("Dark outlines").join("D \u00B7 Dark Stroke");
+      xml = xml.split("Option comparison").join(brandName + " Option " + (activeOpt + 1) + " Overview");
+      return xml;
+    }
+
+    /* ── Process chart XML: positional color replacement ── */
+    function processChart(xml) {
+      var hasL = false, hasD = false;
+      T_L_CAT.forEach(function(c){if(xml.indexOf('val="'+c+'"')>=0)hasL=true;});
+      T_D_CAT.forEach(function(c){if(xml.indexOf('val="'+c+'"')>=0)hasD=true;});
+
+      var tmplOrder = hasD ? T_D_CAT : T_L_CAT;
+      var newOrder = hasD ? N_D_CAT : N_L_CAT;
+      var palSet = {};
+      tmplOrder.forEach(function(c){palSet[c]=true;});
+
+      /* Count palette fills to determine if bar (8) or donut (9) */
+      var countRe = /srgbClr val="([A-F0-9]{6})"/g;
+      var cm, palCount = 0;
+      while ((cm = countRe.exec(xml)) !== null) { if (palSet[cm[1]]) palCount++; }
+
+      /* Bar charts (8 fills) skip position 7 (the duplicate), donut charts (9) have all */
+      var posMap = palCount >= 9 ? [0,1,2,3,4,5,6,7,8] : [0,1,2,3,4,5,6,8];
+
+      var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
+      var fm2, catIdx = 0;
+      var chartReplacements = [];
+      while ((fm2 = fillRe.exec(xml)) !== null) {
+        if (fm2[1] === "000064" || fm2[1] === "000063") {
+          chartReplacements.push({pos: fm2.index + 14, len: 6, val: N_DARK});
+        } else if (palSet[fm2[1]] && catIdx < posMap.length) {
+          chartReplacements.push({pos: fm2.index + 14, len: 6, val: newOrder[posMap[catIdx]]});
+          catIdx++;
+        }
+      }
+      chartReplacements.sort(function(a,b){return b.pos-a.pos;});
+      var ch = xml.split("");
+      for (var ci2 = 0; ci2 < chartReplacements.length; ci2++) {
+        var cr = chartReplacements[ci2];
+        ch.splice(cr.pos, cr.len, cr.val);
+      }
+      return ch.join("");
+    }
+
+    /* ── Process other XML (themes, etc.): global replace unique colors only ── */
+    function processOther(xml) {
+      var uniqueMap2 = {};
+      for (var i = 0; i < 3; i++) {
+        uniqueMap2[T_L_SEM[i]] = N_L_SEM[i]; uniqueMap2[T_D_SEM[i]] = N_D_SEM[i];
+        uniqueMap2[T_L_DEEM[i]] = N_L_DEEM[i]; uniqueMap2[T_D_DEEM[i]] = N_D_DEEM[i];
+      }
+      uniqueMap2["000064"] = N_DARK; uniqueMap2["000063"] = N_DARK;
+      for (var k in uniqueMap2) {
+        xml = xml.split('val="'+k+'"').join('val="'+uniqueMap2[k]+'"');
+        xml = xml.split('val="'+k.toLowerCase()+'"').join('val="'+uniqueMap2[k]+'"');
+      }
+      xml = xml.split("HAP").join(brandName);
       return xml;
     }
 
@@ -599,14 +765,14 @@ export default function App() {
     }).then(function(zip) {
       var xmlFiles = [];
       zip.forEach(function(path, entry) {
-        if (!entry.dir && (path.endsWith(".xml") || path.endsWith(".rels"))) {
-          xmlFiles.push(path);
-        }
+        if (!entry.dir && (path.endsWith(".xml") || path.endsWith(".rels"))) xmlFiles.push(path);
       });
-      /* Process all XML files */
       var promises = xmlFiles.map(function(path) {
         return zip.file(path).async("string").then(function(content) {
-          var updated = replaceColors(content);
+          var updated;
+          if (path.indexOf("ppt/slides/slide") >= 0) { updated = processSlide(content); }
+          else if (path.indexOf("ppt/charts/chart") >= 0) { updated = processChart(content); }
+          else { updated = processOther(content); }
           zip.file(path, updated);
         });
       });
@@ -660,7 +826,7 @@ export default function App() {
       var best=null, bestDist=0;
       for(var attempt=0;attempt<60;attempt++){
         var candidate=(s.hue+25+Math.floor(Math.random()*130))%360;
-        if(minHueDist(candidate,otherHues)<25) continue;
+        if(minHueDist(candidate,otherHues)<35) continue;
         var satOpt=Math.min(90,Math.max(25,s.sat+Math.floor(Math.random()*30)-15));
         var startL=Math.min(65,Math.max(30,50+Math.floor(Math.random()*20)-10));
         var lHex=adjustForContrast(hsl2hex(candidate,satOpt,startL),"#ffffff",4.5);
@@ -830,7 +996,7 @@ export default function App() {
         </div>
       </div>)}
 
-      {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} />}
+      {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} brandColors={brandColors} />}
     </div>
   );
 }
