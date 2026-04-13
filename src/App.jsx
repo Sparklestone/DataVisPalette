@@ -288,8 +288,19 @@ function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
   var sem = SEM_BASES.map(function(base,i) { var pair=makePair(base.hue,base.sat,darkBg); return {id:i,hue:base.hue,sat:pair.sat,lightHex:pair.lightHex,darkHex:pair.darkHex,label:base.label}; });
   var deemBases = DEEM_OPT[optIdx] || DEEM_OPT[0];
   var deem = deemBases.map(function(base,i) { var rawL=hsl2hex(base.hue,base.sat,base.lL); var rawD=hsl2hex(base.hue,base.sat,base.dL); return {id:i,hue:base.hue,sat:base.sat,lightHex:adjustForContrast(rawL,"#ffffff",4.5),darkHex:adjustForContrast(rawD,darkBg||"#121212",4.5),label:["Light","Mid","Dark"][i]}; });
+
+  /* Spectrum: hue-sorted */
   var spectrum = cat.slice().sort(function(a,b) { return a.hue - b.hue; });
-  return {categorical:cat, semantic:sem, deemphasis:deem, spectrum:spectrum};
+
+  /* Categorical: reorder for max neighbor contrast (every 5th index puts opposite hues adjacent) */
+  var hueSorted = spectrum.slice();
+  var contrastOrder = [0,5,1,6,2,7,3,8,4]; /* ≥160° between adjacent slots */
+  var categorical = contrastOrder.map(function(ci,ni) {
+    var s = hueSorted[ci];
+    return {id:ni, hue:s.hue, sat:s.sat, lightHex:s.lightHex, darkHex:s.darkHex, label:s.label, swapped:s.swapped};
+  });
+
+  return {categorical:categorical, semantic:sem, deemphasis:deem, spectrum:spectrum};
 }
 
 /* ═══ SUPABASE STORAGE ═══ */
