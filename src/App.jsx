@@ -829,7 +829,7 @@ export default function App() {
 
   function savePalettes(){if(activeBrand){sbSavePalettes(activeBrand,opts);var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].palettes=opts;setBrands(nb);show("Saved!");}else{show("Upload a brand first");}}
 
-  function reworkAll(){var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);regen(brandColors,darkStroke,newSeed);show("Reworked!");}
+  function reworkAll(){var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);setOpts(function(prev){var next=prev.slice();next[activeOpt]=generatePalettes(brandColors,activeOpt,darkStroke,newSeed);return next;});show("Reworked Opt "+(activeOpt+1)+"!");}
 
   function copyPptXml(isDk, includeSpectrum) {
     if (!cur) return;
@@ -886,18 +886,12 @@ export default function App() {
       });
     }
 
-    /* Template L/D palette colors (after repair) → new palette positions */
-    var L_MAP = {"CF480B":0,"83770E":1,"498215":2,"285D2F":3,"468078":4,"1D79CA":5,"180DF2":6,"DB0C99":7,"A74DCB":8};
-    var D_MAP = {"F2540D":0,"E6D119":1,"7CDB24":2,"40954B":3,"9CC9C3":4,"2086DF":5,"7670F7":6,"F20DA9":7,"C181DA":8};
-    /* Semantic/deemphasis (unique, can do global replace) */
-    var SEM_L = {"1D8640":0,"A26B0D":1,"DB2424":2};
-    var SEM_D = {"2DD264":0,"EC9C13":1,"E24E4E":2};
-    var DEEM_L = {"6B7584":0,"6D7680":1,"565B61":2};
-    var DEEM_D = {"818A98":0,"9FA5AD":1,"BBBFC3":2};
 
     function processSlide(xml, slideMap) {
       xml = repairXml(xml);
-      /* 1. Find all text labels positionally */
+      var STRUCT = {"222222":1,"FFFFFF":1,"D3D3D3":1,"888888":1};
+
+      /* 1. Find all text labels positionally and build replacement map */
       var textEntries = [];
       var textRe = /#([A-F0-9]{6})(?=[^A-F0-9])/g;
       var m, idx = 0;
@@ -905,32 +899,25 @@ export default function App() {
         textEntries.push({pos: m.index + 1, len: 6, oldHex: m[1], newHex: slideMap[idx]});
         idx++;
       }
-      /* 2. Find all palette srgbClr fills, anchor each to nearest text label with same hex */
-      var ALL_TMPL_HEX = {};
-      for (var lk in L_MAP) ALL_TMPL_HEX[lk] = true;
-      for (var dk in D_MAP) ALL_TMPL_HEX[dk] = true;
-      for (var sk in SEM_L) ALL_TMPL_HEX[sk] = true;
-      for (var sdk in SEM_D) ALL_TMPL_HEX[sdk] = true;
-      for (var dlk in DEEM_L) ALL_TMPL_HEX[dlk] = true;
-      for (var ddk in DEEM_D) ALL_TMPL_HEX[ddk] = true;
 
+      /* 2. Find ALL non-structural fills and pair each with its NEXT text label.
+         In the template, each swatch shape has: fill (~1080 chars before) → text label.
+         Brand strip fills have no nearby text label (>2000 chars away). */
       var fillEntries = [];
       var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
       var fm;
       while ((fm = fillRe.exec(xml)) !== null) {
-        if (!ALL_TMPL_HEX[fm[1]]) continue;
-        /* Find nearest text label with same original hex */
-        var nearest = null, nearestDist = Infinity;
+        if (STRUCT[fm[1]]) continue;
+        /* Find next text label after this fill */
+        var nextText = null;
         for (var t = 0; t < textEntries.length; t++) {
-          if (textEntries[t].oldHex === fm[1]) {
-            var dist = Math.abs(fm.index - textEntries[t].pos);
-            if (dist < nearestDist) { nearestDist = dist; nearest = textEntries[t]; }
-          }
+          if (textEntries[t].pos > fm.index) { nextText = textEntries[t]; break; }
         }
-        if (nearest) {
-          fillEntries.push({pos: fm.index + 13, len: 6, newHex: nearest.newHex});
+        if (nextText && (nextText.pos - fm.index) < 1500) {
+          fillEntries.push({pos: fm.index + 13, len: 6, newHex: nextText.newHex});
         }
       }
+
       /* 3. Apply all replacements end-to-start */
       var allR = [];
       for (var ti = 0; ti < textEntries.length; ti++) allR.push({pos:textEntries[ti].pos, len:6, val:textEntries[ti].newHex});
@@ -1329,7 +1316,7 @@ export default function App() {
       {/* Tabs + Rework */}
       <div style={{maxWidth:1200,margin:"8px auto 0",padding:"0 16px",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{["Opt 1","Opt 2","Opt 3"].map(function(lbl,i){return (<button key={i} onClick={function(){setActiveOpt(i);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeOpt===i?"#333":"transparent",color:activeOpt===i?"#fff":"#888",fontWeight:activeOpt===i?700:400,fontSize:13,cursor:"pointer"}}>{lbl}</button>);})}</div>
-        <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework All Colors</button>
+        <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework Colors</button>
         <button onClick={downloadPptx} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
       </div>
       {/* L and D side by side */}
