@@ -175,6 +175,30 @@ var OPT_HUES = [
   [{hue:27,sat:70,label:"Terracotta"},{hue:67,sat:65,label:"Mustard"},{hue:107,sat:55,label:"Moss"},{hue:147,sat:52,label:"Sage"},{hue:187,sat:62,label:"Steel"},{hue:227,sat:65,label:"Navy"},{hue:267,sat:48,label:"Lavender"},{hue:307,sat:52,label:"Plum"},{hue:347,sat:60,label:"Crimson"}],
 ];
 var SEM_BASES = [{hue:140,sat:65,label:"Success"},{hue:38,sat:85,label:"Warning"},{hue:0,sat:72,label:"Error"}];
+/* Smart semantics: sample from palette if a matching hue exists */
+function generateSmartSemantics(spectrum, darkBg) {
+  var SEM_RANGES = [{label:"Success",center:140,lo:100,hi:170},{label:"Warning",center:38,lo:20,hi:60},{label:"Error",center:0,lo:340,hi:20}];
+  return SEM_RANGES.map(function(sr, i) {
+    var best = null, bestBrand = null;
+    for (var si = 0; si < spectrum.length; si++) {
+      var h = spectrum[si].hue;
+      var inRange = sr.lo < sr.hi ? (h >= sr.lo && h <= sr.hi) : (h >= sr.lo || h <= sr.hi);
+      if (!inRange) continue;
+      var isBrand = spectrum[si].swapped != null;
+      if (isBrand) {
+        if (!bestBrand || Math.abs(hueDist(h, sr.center)) < Math.abs(hueDist(bestBrand.hue, sr.center))) bestBrand = spectrum[si];
+      } else {
+        if (!best || Math.abs(hueDist(h, sr.center)) < Math.abs(hueDist(best.hue, sr.center))) best = spectrum[si];
+      }
+    }
+    var pick = bestBrand || best; /* prefer brand over auto */
+    if (pick) {
+      return {id:i, hue:pick.hue, sat:pick.sat, lightHex:pick.lightHex, darkHex:pick.darkHex, label:sr.label};
+    }
+    var pair = makePair(sr.center, SEM_BASES[i].sat, darkBg);
+    return {id:i, hue:sr.center, sat:pair.sat, lightHex:pair.lightHex, darkHex:pair.darkHex, label:sr.label};
+  });
+}
 var DEEM_OPT = [
   [{hue:215,sat:10,lL:72,dL:55},{hue:215,sat:8,lL:55,dL:65},{hue:215,sat:6,lL:36,dL:75}],
   [{hue:25,sat:8,lL:74,dL:56},{hue:25,sat:6,lL:56,dL:66},{hue:25,sat:5,lL:38,dL:74}],
@@ -395,7 +419,7 @@ function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
     return {id:ni, hue:s4.hue, sat:s4.sat, lightHex:s4.lightHex, darkHex:s4.darkHex, label:s4.label, swapped:s4.swapped};
   });
 
-  var sem = SEM_BASES.map(function(base,i3){var pair=makePair(base.hue,base.sat,darkBg);return {id:i3,hue:base.hue,sat:pair.sat,lightHex:pair.lightHex,darkHex:pair.darkHex,label:base.label};});
+  var sem = generateSmartSemantics(spectrum, darkBg);
 
   /* Deemphasis: darkest, best-middle, lightest from brand grays */
   var deem;
@@ -500,14 +524,15 @@ function generateFresh(brandColors, optIdx, darkBg, reworkSeed) {
     cat[best2.idx] = {id:cat[best2.idx].id, hue:best2.fix.hue, sat:best2.fix.sat, lightHex:best2.fix.pair.lightHex, darkHex:best2.fix.pair.darkHex, label:"H"+Math.round(best2.fix.hue)+"°", swapped:null};
   }
 
-  var sem = SEM_BASES.map(function(base,i){var pair=makePair(base.hue,base.sat,darkBg);return {id:i,hue:base.hue,sat:pair.sat,lightHex:pair.lightHex,darkHex:pair.darkHex,label:base.label};});
-  var deemBases = DEEM_OPT[optIdx] || DEEM_OPT[0];
-  var deem = deemBases.map(function(base,i){var rawL=hsl2hex(base.hue,base.sat,base.lL);var rawD=hsl2hex(base.hue,base.sat,base.dL);return {id:i,hue:base.hue,sat:base.sat,lightHex:adjustForContrast(rawL,"#ffffff",4.5),darkHex:adjustForContrast(rawD,darkBg||"#121212",4.5),label:["Light","Mid","Dark"][i]};});
-
   var spectrum = cat.slice().sort(function(a,b){return a.hue-b.hue;});
   var hueSorted = spectrum.slice();
   var contrastOrder = [0,5,1,6,2,7,3,8,4];
   var categorical = contrastOrder.map(function(ci,ni){var s=hueSorted[ci];return {id:ni,hue:s.hue,sat:s.sat,lightHex:s.lightHex,darkHex:s.darkHex,label:s.label,swapped:s.swapped};});
+
+  var sem = generateSmartSemantics(spectrum, darkBg);
+  var deemBases = DEEM_OPT[optIdx] || DEEM_OPT[0];
+  var deem = deemBases.map(function(base,i){var rawL=hsl2hex(base.hue,base.sat,base.lL);var rawD=hsl2hex(base.hue,base.sat,base.dL);return {id:i,hue:base.hue,sat:base.sat,lightHex:adjustForContrast(rawL,"#ffffff",4.5),darkHex:adjustForContrast(rawD,darkBg||"#121212",4.5),label:["Light","Mid","Dark"][i]};});
+
   return {categorical:categorical, semantic:sem, deemphasis:deem, spectrum:spectrum};
 }
 
@@ -613,7 +638,7 @@ function Swatch(props) {
 /* ═══ OPTION PANEL ═══ */
 function OptionPanel(props) {
   var pal=props.pal,isDark=props.isDark,stroke=props.stroke,darkBg=props.darkBg;
-  var activeTab=props.activeTab,onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect;
+  var onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect;
   var mode=isDark?"D":"L"; var catSlots=pal.categorical||[]; var specSlots=pal.spectrum||[]; var semSlots=pal.semantic||[]; var deemSlots=pal.deemphasis||[];
   function SL(lp){return (<div style={{marginBottom:4,marginTop:14,display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:"0.08em",color:"#555"}}>{lp.text}</span>{lp.sub&&<span style={{fontSize:12,color:"#777",fontFamily:"'Space Mono',monospace"}}>{lp.sub}</span>}</div>);}
   function renderSwatches(slots,type){return (<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{slots.map(function(s){var hex=isDark?s.darkHex:s.lightHex;return (<Swatch key={type+"-"+s.id+"-"+s.hue+"-"+mode} hex={hex} stroke={stroke} isDark={isDark} darkBg={darkBg} onHue={onHue?function(){onHue(type,s.id);}:null} onSat={onSat?function(){onSat(type,s.id);}:null} onLight={onLight?function(){onLight(type,s.id);}:null} onSelect={onSelect} label={s.label} slotId={s.id} slotType={type} />);})}</div>);}
@@ -626,11 +651,11 @@ function OptionPanel(props) {
       </div>
       <SL text="Categorical" sub="max neighbor contrast" />
       {renderSwatches(catSlots,"categorical")}
-      {activeTab==="spectrum"&&(<div>
+      {(<div>
         <SL text="Spectrum" sub="sorted by hue" />
         <div style={{borderRadius:6,padding:8,backgroundColor:"#f8f8f8",border:"1px solid #eee",marginBottom:8}}>
           <div style={{display:"flex",height:24,borderRadius:4,overflow:"hidden",marginBottom:6}}>{specSlots.map(function(s,i){return <div key={i} style={{flex:1,backgroundColor:isDark?s.darkHex:s.lightHex}} />;})}</div>
-          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{specSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+stroke,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:s.label,slotId:s.id,slotType:"categorical",onHue:onHue?function(){onHue("categorical",s.id);}:null,onSat:onSat?function(){onSat("categorical",s.id);}:null,onLight:onLight?function(){onLight("categorical",s.id);}:null});}} title={hex} />);})}</div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{specSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+stroke,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:s.label,slotId:s.id,slotType:"spectrum"});}} title={hex} />);})}</div>
         </div>
       </div>)}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
@@ -732,7 +757,7 @@ function BrandStrip(props) {
 
 /* ═══ COMPARE (compact) ═══ */
 function CompareView(props) {
-  var opts=props.opts,darkStroke=props.darkStroke,activeTab=props.activeTab,brandColors=props.brandColors,brands=props.brands,activeBrand=props.activeBrand,setSelInfo=props.setSelInfo,setCompare=props.setCompare,setSlotHSL=props.setSlotHSL,selInfo=props.selInfo,hueShift=props.hueShift,satShift=props.satShift,lightShift=props.lightShift;
+  var opts=props.opts,darkStroke=props.darkStroke,brandColors=props.brandColors,brands=props.brands,activeBrand=props.activeBrand,setSelInfo=props.setSelInfo,setCompare=props.setCompare,setSlotHSL=props.setSlotHSL,selInfo=props.selInfo,hueShift=props.hueShift,satShift=props.satShift,lightShift=props.lightShift;
   function CS(cp){var oi=cp.oi,type=cp.type||"categorical";return (<div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var hCb=hueShift?function(){hueShift(oi,type,s.id);}:null;var sCb=satShift?function(){satShift(oi,type,s.id);}:null;var lCb=lightShift?function(){lightShift(oi,type,s.id);}:null;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+cp.stk,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){setSelInfo({hex:hex,label:s.label,slotId:s.id,slotType:type,onHue:hCb,onSat:sCb,onLight:lCb});}} title={hex} />);})}</div>);}
   function CSL(cp){var stk=cp.stk||"#ffffff";return (<div style={{marginTop:6}}>{cp.slots.map(function(s,i){var hex=cp.useL?s.lightHex:s.darkHex;var ratio=CR(hex,cp.bg).toFixed(1);var nn=parseFloat(ratio);return (<div key={i} style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}><div style={{width:60,height:18,borderRadius:3,backgroundColor:hex,border:"2px solid "+stk,boxSizing:"border-box",flexShrink:0}} /><span style={{color:hex,fontWeight:700,fontSize:11}}>{s.label}</span><span style={{fontSize:9,fontWeight:700,color:"#fff",backgroundColor:nn>=4.5?"#1a7a3d":"#c42b2b",padding:"1px 3px",borderRadius:2}}>{ratio}:1</span></div>);})}</div>);}
   function CC(cp){var bg=cp.dk?darkStroke:"#ffffff";return (<div style={{borderRadius:8,backgroundColor:bg,border:"1px solid "+(cp.dk?"rgba(255,255,255,0.08)":"#e8e8e8"),padding:10,marginBottom:6}}>{cp.children}</div>);}
@@ -774,7 +799,7 @@ function CompareView(props) {
 export default function App() {
   var _brands=useState({}),_actBrand=useState(null),_brandColors=useState([]),_opts=useState([null,null,null]);
   var _actOpt=useState(0),_darkStroke=useState("#032054"),_selInfo=useState(null),_showUpload=useState(false);
-  var _uploadName=useState(""),_toast=useState(""),_loaded=useState(false),_activeTab=useState("categorical");
+  var _uploadName=useState(""),_toast=useState(""),_loaded=useState(false);
   var _compare=useState(false),_brandDD=useState(false),_reworkSeed=useState(0),_pptModal=useState(null);
   var fileRef=useRef(null);
   var brands=_brands[0],setBrands=_brands[1],activeBrand=_actBrand[0],setActiveBrand=_actBrand[1];
@@ -782,7 +807,7 @@ export default function App() {
   var activeOpt=_actOpt[0],setActiveOpt=_actOpt[1],darkStroke=_darkStroke[0],setDarkStroke=_darkStroke[1];
   var selInfo=_selInfo[0],setSelInfo=_selInfo[1],showUpload=_showUpload[0],setShowUpload=_showUpload[1];
   var uploadName=_uploadName[0],setUploadName=_uploadName[1],toast=_toast[0],setToast=_toast[1];
-  var loaded=_loaded[0],setLoaded=_loaded[1],activeTab=_activeTab[0],setActiveTab=_activeTab[1];
+  var loaded=_loaded[0],setLoaded=_loaded[1];
   var compare=_compare[0],setCompare=_compare[1],brandDD=_brandDD[0],setBrandDD=_brandDD[1];
   var reworkSeed=_reworkSeed[0],setReworkSeed=_reworkSeed[1];
   var pptModal=_pptModal[0],setPptModal=_pptModal[1];
@@ -872,29 +897,52 @@ export default function App() {
 
     function processSlide(xml, slideMap) {
       xml = repairXml(xml);
-      /* Replace #XXXXXX text labels positionally */
-      var replacements = [];
+      /* 1. Find all text labels positionally */
+      var textEntries = [];
       var textRe = /#([A-F0-9]{6})(?=[^A-F0-9])/g;
       var m, idx = 0;
       while ((m = textRe.exec(xml)) !== null && idx < slideMap.length) {
-        replacements.push({pos: m.index + 1, len: 6, val: slideMap[idx]});
+        textEntries.push({pos: m.index + 1, len: 6, oldHex: m[1], newHex: slideMap[idx]});
         idx++;
       }
-      for (var r = replacements.length - 1; r >= 0; r--) {
-        var rp = replacements[r];
+      /* 2. Find all palette srgbClr fills, anchor each to nearest text label with same hex */
+      var ALL_TMPL_HEX = {};
+      for (var lk in L_MAP) ALL_TMPL_HEX[lk] = true;
+      for (var dk in D_MAP) ALL_TMPL_HEX[dk] = true;
+      for (var sk in SEM_L) ALL_TMPL_HEX[sk] = true;
+      for (var sdk in SEM_D) ALL_TMPL_HEX[sdk] = true;
+      for (var dlk in DEEM_L) ALL_TMPL_HEX[dlk] = true;
+      for (var ddk in DEEM_D) ALL_TMPL_HEX[ddk] = true;
+
+      var fillEntries = [];
+      var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
+      var fm;
+      while ((fm = fillRe.exec(xml)) !== null) {
+        if (!ALL_TMPL_HEX[fm[1]]) continue;
+        /* Find nearest text label with same original hex */
+        var nearest = null, nearestDist = Infinity;
+        for (var t = 0; t < textEntries.length; t++) {
+          if (textEntries[t].oldHex === fm[1]) {
+            var dist = Math.abs(fm.index - textEntries[t].pos);
+            if (dist < nearestDist) { nearestDist = dist; nearest = textEntries[t]; }
+          }
+        }
+        if (nearest) {
+          fillEntries.push({pos: fm.index + 13, len: 6, newHex: nearest.newHex});
+        }
+      }
+      /* 3. Apply all replacements end-to-start */
+      var allR = [];
+      for (var ti = 0; ti < textEntries.length; ti++) allR.push({pos:textEntries[ti].pos, len:6, val:textEntries[ti].newHex});
+      for (var fi2 = 0; fi2 < fillEntries.length; fi2++) allR.push({pos:fillEntries[fi2].pos, len:6, val:fillEntries[fi2].newHex});
+      allR.sort(function(a, b) { return b.pos - a.pos; });
+      for (var r = 0; r < allR.length; r++) {
+        var rp = allR[r];
         xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + rp.len);
       }
-      /* Replace srgbClr fills for palette colors (now properly 6-char after repair) */
-      for (var lk in L_MAP) { xml = xml.split('val="' + lk + '"').join('val="' + NLC[L_MAP[lk]] + '"'); }
-      for (var dk in D_MAP) { xml = xml.split('val="' + dk + '"').join('val="' + NDC[D_MAP[dk]] + '"'); }
-      for (var sk in SEM_L) { xml = xml.split('val="' + sk + '"').join('val="' + NLSEM[SEM_L[sk]] + '"'); }
-      for (var sdk in SEM_D) { xml = xml.split('val="' + sdk + '"').join('val="' + NDSEM[SEM_D[sdk]] + '"'); }
-      for (var dlk in DEEM_L) { xml = xml.split('val="' + dlk + '"').join('val="' + NLDEEM[DEEM_L[dlk]] + '"'); }
-      for (var ddk in DEEM_D) { xml = xml.split('val="' + ddk + '"').join('val="' + NDDEEM[DEEM_D[ddk]] + '"'); }
-      /* Dark bg */
+      /* Dark bg + brand name */
       xml = xml.split('val="000064"').join('val="' + NDARK + '"');
       xml = xml.split('val="000063"').join('val="' + NDARK + '"');
-      /* Text labels */
       xml = xml.split("HAP").join(brandName);
       xml = xml.split("Option 1").join("Option " + (activeOpt + 1));
       return xml;
@@ -902,11 +950,45 @@ export default function App() {
 
     function processChart(xml) {
       xml = repairXml(xml);
-      /* Map repaired palette colors to new values */
-      for (var lk2 in L_MAP) { xml = xml.split('val="' + lk2 + '"').join('val="' + NLC[L_MAP[lk2]] + '"'); }
-      for (var dk2 in D_MAP) { xml = xml.split('val="' + dk2 + '"').join('val="' + NDC[D_MAP[dk2]] + '"'); }
-      xml = xml.split('val="000064"').join('val="' + NDARK + '"');
-      xml = xml.split('val="000063"').join('val="' + NDARK + '"');
+      /* Positional replacement: charts have exactly 9 data series fills.
+         L charts: 9-10 fills = [s1,s2,s3,s4,s5,s6,s7,s8,s9,(gray)]
+         D charts: 20 fills = alternating fill+stroke pairs for 9 series + extras
+         D pattern A (fill-first): [s1f,s1s,s2f,s2s,...,s9f,s9s,extra,extra]
+         D pattern B (stroke-first): [s1s,s1f,s2s,s2f,...,s9s,s9f,extra,extra] */
+      var fills = [];
+      var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
+      var fm;
+      while ((fm = fillRe.exec(xml)) !== null) {
+        fills.push({pos: fm.index + 13, hex: fm[1]});
+      }
+      var isD = fills.length >= 18;
+      var replacements = [];
+      if (!isD) {
+        /* L chart: first 9 fills are series 1-9, map to NLS[0-8] */
+        for (var li = 0; li < Math.min(9, fills.length); li++) {
+          replacements.push({pos: fills[li].pos, val: NLS[li]});
+        }
+      } else {
+        /* D chart: detect pattern by first fill */
+        var strokeFirst = fills[0].hex === "000064" || fills[0].hex === NDARK;
+        for (var di = 0; di < 18 && di < fills.length; di++) {
+          var seriesIdx = Math.floor(di / 2);
+          var isFill = strokeFirst ? (di % 2 === 1) : (di % 2 === 0);
+          replacements.push({pos: fills[di].pos, val: isFill ? NDS[seriesIdx] : NDARK});
+        }
+        /* Remaining fills (18+) → NDARK or keep */
+        for (var ei = 18; ei < fills.length; ei++) {
+          if (fills[ei].hex === "000064") {
+            replacements.push({pos: fills[ei].pos, val: NDARK});
+          }
+        }
+      }
+      /* Apply end-to-start */
+      replacements.sort(function(a, b) { return b.pos - a.pos; });
+      for (var r = 0; r < replacements.length; r++) {
+        var rp = replacements[r];
+        xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + 6);
+      }
       return xml;
     }
 
@@ -1212,9 +1294,8 @@ export default function App() {
 
   var cur=opts[activeOpt];
   if(!loaded||!cur) return <div style={{padding:40,textAlign:"center",color:"#666"}}>Loading...</div>;
-  var tabs=[{k:"categorical",l:"Categorical"},{k:"spectrum",l:"Spectrum"}];
 
-  if(compare) return <CompareView opts={opts} darkStroke={darkStroke} activeTab={activeTab} brandColors={brandColors} brands={brands} activeBrand={activeBrand} setSelInfo={setSelInfo} setCompare={setCompare} setSlotHSL={setSlotHSL} selInfo={selInfo} hueShift={hueShift} satShift={satShift} lightShift={lightShift} />;
+  if(compare) return <CompareView opts={opts} darkStroke={darkStroke} brandColors={brandColors} brands={brands} activeBrand={activeBrand} setSelInfo={setSelInfo} setCompare={setCompare} setSlotHSL={setSlotHSL} selInfo={selInfo} hueShift={hueShift} satShift={satShift} lightShift={lightShift} />;
 
   return (
     <div style={{minHeight:"100vh",background:"#edeef0",fontFamily:"'Outfit',sans-serif"}}>
@@ -1248,15 +1329,14 @@ export default function App() {
       {/* Tabs + Rework */}
       <div style={{maxWidth:1200,margin:"8px auto 0",padding:"0 16px",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{["Opt 1","Opt 2","Opt 3"].map(function(lbl,i){return (<button key={i} onClick={function(){setActiveOpt(i);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeOpt===i?"#333":"transparent",color:activeOpt===i?"#fff":"#888",fontWeight:activeOpt===i?700:400,fontSize:13,cursor:"pointer"}}>{lbl}</button>);})}</div>
-        <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{tabs.map(function(t){return (<button key={t.k} onClick={function(){setActiveTab(t.k);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeTab===t.k?"#333":"transparent",color:activeTab===t.k?"#fff":"#888",fontWeight:activeTab===t.k?700:400,fontSize:13,cursor:"pointer"}}>{t.l}</button>);})}</div>
         <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework All Colors</button>
         <button onClick={downloadPptx} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
       </div>
       {/* L and D side by side */}
       <div style={{maxWidth:1200,margin:"12px auto 0",padding:"0 16px 40px"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <OptionPanel pal={cur} isDark={false} stroke="#ffffff" darkBg={darkStroke} activeTab={activeTab} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
-          <OptionPanel pal={cur} isDark={true} stroke={darkStroke} darkBg={darkStroke} activeTab={activeTab} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
+          <OptionPanel pal={cur} isDark={false} stroke="#ffffff" darkBg={darkStroke} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
+          <OptionPanel pal={cur} isDark={true} stroke={darkStroke} darkBg={darkStroke} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
         </div>
         {/* Color Tables */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:16}}>
