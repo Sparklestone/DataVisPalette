@@ -617,15 +617,16 @@ function LineChart(p) {
 function Swatch(props) {
   var hex=props.hex,stroke=props.stroke,isDark=props.isDark,darkBg=props.darkBg;
   var onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect,label=props.label;
-  var slotId=props.slotId,slotType=props.slotType;
+  var slotId=props.slotId,slotType=props.slotType,isBrand=props.isBrand;
   var bg=isDark?darkBg:"#ffffff"; var ratio=CR(hex,bg); var pass=ratio>=4.5;
-  var btnStyle={position:"absolute",width:22,height:22,borderRadius:11,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2};
+  var btnStyle={position:"absolute",width:20,height:20,borderRadius:10,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",letterSpacing:0};
   return (
     <div style={{position:"relative",width:96,borderRadius:8,overflow:"hidden",backgroundColor:"#fff",border:"1px solid #eee",flexShrink:0}}>
       <div style={{height:52,backgroundColor:hex,position:"relative",cursor:"pointer",border:"2px solid "+stroke,borderRadius:"6px 6px 0 0",boxSizing:"border-box"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:label,slotId:slotId,slotType:slotType,onHue:onHue,onSat:onSat,onLight:onLight});}}>
-        {onHue&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onHue();}} style={Object.assign({},btnStyle,{top:3,left:3})} title="Shift hue"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
-        {onSat&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onSat();}} style={Object.assign({},btnStyle,{top:3,left:"50%",transform:"translateX(-50%)"})} title="Cycle saturation"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg></button>)}
-        {onLight&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onLight();}} style={Object.assign({},btnStyle,{top:3,right:3})} title="Cycle lightness"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+        {onHue&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onHue();}} style={Object.assign({},btnStyle,{top:4,left:4})} title="Shift hue">H</button>)}
+        {onSat&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onSat();}} style={Object.assign({},btnStyle,{top:4,left:"50%",transform:"translateX(-50%)"})} title="Cycle saturation">S</button>)}
+        {onLight&&(<button onClick={function(e){e.stopPropagation();e.preventDefault();onLight();}} style={Object.assign({},btnStyle,{top:4,right:4})} title="Cycle lightness">L</button>)}
+        {isBrand&&(<div style={{position:"absolute",bottom:3,right:3,width:14,height:14,borderRadius:7,backgroundColor:"rgba(0,0,0,0.35)",color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Space Mono',monospace"}}>B</div>)}
       </div>
       <div style={{padding:"4px 6px 5px",display:"flex",alignItems:"center",gap:4}}>
         <div style={{width:8,height:8,borderRadius:4,backgroundColor:pass?"#1a7a3d":"#c42b2b",flexShrink:0}} />
@@ -641,7 +642,7 @@ function OptionPanel(props) {
   var onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect;
   var mode=isDark?"D":"L"; var catSlots=pal.categorical||[]; var specSlots=pal.spectrum||[]; var semSlots=pal.semantic||[]; var deemSlots=pal.deemphasis||[];
   function SL(lp){return (<div style={{marginBottom:4,marginTop:14,display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:"0.08em",color:"#555"}}>{lp.text}</span>{lp.sub&&<span style={{fontSize:12,color:"#777",fontFamily:"'Space Mono',monospace"}}>{lp.sub}</span>}</div>);}
-  function renderSwatches(slots,type){return (<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{slots.map(function(s){var hex=isDark?s.darkHex:s.lightHex;return (<Swatch key={type+"-"+s.id+"-"+s.hue+"-"+mode} hex={hex} stroke={stroke} isDark={isDark} darkBg={darkBg} onHue={onHue?function(){onHue(type,s.id);}:null} onSat={onSat?function(){onSat(type,s.id);}:null} onLight={onLight?function(){onLight(type,s.id);}:null} onSelect={onSelect} label={s.label} slotId={s.id} slotType={type} />);})}</div>);}
+  function renderSwatches(slots,type){return (<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{slots.map(function(s){var hex=isDark?s.darkHex:s.lightHex;return (<Swatch key={type+"-"+s.id+"-"+s.hue+"-"+mode} hex={hex} stroke={stroke} isDark={isDark} darkBg={darkBg} onHue={onHue?function(){onHue(type,s.id);}:null} onSat={onSat?function(){onSat(type,s.id);}:null} onLight={onLight?function(){onLight(type,s.id);}:null} onSelect={onSelect} label={s.label} slotId={s.id} slotType={type} isBrand={!!s.swapped} />);})}</div>);}
   return (
     <div style={{flex:1,minWidth:0}}>
       <div style={{marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
@@ -701,9 +702,9 @@ function ColorDetail(props) {
     <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={cancelEdit}>
       <div style={{backgroundColor:"#fff",borderRadius:14,maxWidth:340,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
         <div style={{height:110,backgroundColor:displayHex,color:fg,position:"relative",display:"flex",alignItems:"flex-end",padding:14}}>
-          {info.onHue&&!isEditing&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Shift hue"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="5"/><path d="M8 3v-2M13 8h2M8 13v2M3 8h-2" strokeWidth="1.5"/></svg></button>)}
-          {info.onSat&&!isEditing&&(<button onClick={function(){info.onSat();onClose();}} style={{position:"absolute",top:10,left:"50%",transform:"translateX(-50%)",width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle saturation"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg></button>)}
-          {info.onLight&&!isEditing&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:28,height:28,borderRadius:14,backgroundColor:"transparent",color:"rgba(255,255,255,0.5)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2}} title="Cycle lightness"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1v5h5"/><path d="M15 15v-5h-5"/><path d="M2.3 10a6 6 0 0 0 10.3 1.5L15 10M1 6l2.4-1.5A6 6 0 0 1 13.7 6"/></svg></button>)}
+          {info.onHue&&!isEditing&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:26,height:26,borderRadius:13,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Shift hue">H</button>)}
+          {info.onSat&&!isEditing&&(<button onClick={function(){info.onSat();onClose();}} style={{position:"absolute",top:10,left:"50%",transform:"translateX(-50%)",width:26,height:26,borderRadius:13,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Cycle saturation">S</button>)}
+          {info.onLight&&!isEditing&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:26,height:26,borderRadius:13,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Cycle lightness">L</button>)}
           {canEdit&&(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:36,height:36,borderRadius:18,backgroundColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",border:"none"}}>
             <input type="color" value={displayHex} onChange={handleColorInput} style={{position:"absolute",inset:-6,width:"150%",height:"150%",cursor:"pointer",opacity:0}} />
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={fg} strokeOpacity="0.5" strokeWidth="1.5" strokeLinecap="round"><path d="M12 1l3 3-9 9H3v-3z"/><path d="M10 3l3 3"/></svg>
@@ -801,6 +802,7 @@ export default function App() {
   var _actOpt=useState(0),_darkStroke=useState("#032054"),_selInfo=useState(null),_showUpload=useState(false);
   var _uploadName=useState(""),_toast=useState(""),_loaded=useState(false);
   var _compare=useState(false),_brandDD=useState(false),_reworkSeed=useState(0),_pptModal=useState(null);
+  var _undoStack=useState([]);
   var fileRef=useRef(null);
   var brands=_brands[0],setBrands=_brands[1],activeBrand=_actBrand[0],setActiveBrand=_actBrand[1];
   var brandColors=_brandColors[0],setBrandColors=_brandColors[1],opts=_opts[0],setOpts=_opts[1];
@@ -811,6 +813,10 @@ export default function App() {
   var compare=_compare[0],setCompare=_compare[1],brandDD=_brandDD[0],setBrandDD=_brandDD[1];
   var reworkSeed=_reworkSeed[0],setReworkSeed=_reworkSeed[1];
   var pptModal=_pptModal[0],setPptModal=_pptModal[1];
+  var undoStack=_undoStack[0],setUndoStack=_undoStack[1];
+  function pushUndo(){setUndoStack(function(prev){var next=prev.concat([JSON.stringify(opts)]);if(next.length>30)next=next.slice(next.length-30);return next;});}
+  function undo(){setUndoStack(function(prev){if(!prev.length)return prev;var next=prev.slice();var last=next.pop();setOpts(JSON.parse(last));return next;});show("Undo");}
+  useEffect(function(){function onKey(e){if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();undo();}}window.addEventListener("keydown",onKey);return function(){window.removeEventListener("keydown",onKey);};},[]);
   function show(msg){setToast(msg);setTimeout(function(){setToast("");},2500);}
   function regen(bc,ds,seed){setOpts([generatePalettes(bc,0,ds,seed),generatePalettes(bc,1,ds,seed),generatePalettes(bc,2,ds,seed)]);}
 
@@ -829,7 +835,7 @@ export default function App() {
 
   function savePalettes(){if(activeBrand){sbSavePalettes(activeBrand,opts);var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].palettes=opts;setBrands(nb);show("Saved!");}else{show("Upload a brand first");}}
 
-  function reworkAll(){var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);setOpts(function(prev){var next=prev.slice();next[activeOpt]=generatePalettes(brandColors,activeOpt,darkStroke,newSeed);return next;});show("Reworked Opt "+(activeOpt+1)+"!");}
+  function reworkAll(){pushUndo();var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);setOpts(function(prev){var next=prev.slice();next[activeOpt]=generatePalettes(brandColors,activeOpt,darkStroke,newSeed);return next;});show("Reworked Opt "+(activeOpt+1)+"!");}
 
   function copyPptXml(isDk, includeSpectrum) {
     if (!cur) return;
@@ -1041,7 +1047,7 @@ export default function App() {
   },[brands,uploadName]);
 
   /* Hue shift: only changes ONE slot, ensures distinct from siblings */
-  var hueShift=useCallback(function(oi,type,sid){
+  var hueShift=useCallback(function(oi,type,sid){pushUndo();
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
       var slots=next[oi][type];
@@ -1128,7 +1134,7 @@ export default function App() {
 
   /* ═══ SATURATION SHIFT (S button) ═══ */
   var SAT_STEPS = [20, 30, 40, 50, 60, 70, 80, 90, 95];
-  var satShift=useCallback(function(oi,type,sid){
+  var satShift=useCallback(function(oi,type,sid){pushUndo();
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
       var slots=next[oi][type];
@@ -1185,7 +1191,7 @@ export default function App() {
 
   /* ═══ LIGHTNESS SHIFT (L button) ═══ */
   var LIGHT_STEPS = [12, 20, 28, 36, 44, 52, 60, 68, 75];
-  var lightShift=useCallback(function(oi,type,sid){
+  var lightShift=useCallback(function(oi,type,sid){pushUndo();
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
       var slots=next[oi][type];
@@ -1237,7 +1243,7 @@ export default function App() {
     });
   },[darkStroke]);
 
-  var setSlotHSL=useCallback(function(type,sid,newH,newS,newL){
+  var setSlotHSL=useCallback(function(type,sid,newH,newS,newL){pushUndo();
     var oi=activeOpt;
     setOpts(function(prev){
       var next=JSON.parse(JSON.stringify(prev));
@@ -1313,6 +1319,16 @@ export default function App() {
         </div>)}
         {toast&&<span style={{fontSize:12,fontFamily:"'Space Mono',monospace",color:"#1a7a3d",backgroundColor:"#e8f5e9",padding:"4px 8px",borderRadius:4,fontWeight:600}}>{toast}</span>}
       </div></div>
+      {!activeBrand&&brandColors.length===0?(
+        <div style={{maxWidth:600,margin:"80px auto",padding:"0 16px",textAlign:"center"}}>
+          <div style={{fontSize:64,marginBottom:16,opacity:0.15}}>&#9673;</div>
+          <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,letterSpacing:"0.05em",color:"#555",marginBottom:8}}>Upload a Brand to Get Started</h2>
+          <p style={{fontSize:14,color:"#888",lineHeight:1.6,marginBottom:24}}>Upload a CSV or TSV file with <strong>Name</strong> and <strong>Hex</strong> columns to generate AA-compliant data visualization palettes from your brand colors.</p>
+          <button onClick={function(){setShowUpload(true);}} style={{padding:"10px 24px",borderRadius:8,border:"none",backgroundColor:"#333",color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>+ Upload Brand Colors</button>
+          {Object.keys(brands).length>0&&(<div style={{marginTop:24}}><p style={{fontSize:12,color:"#999",marginBottom:8}}>Or select a saved brand:</p><div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap"}}>{Object.entries(brands).map(function(entry){var k=entry[0],v=entry[1];return (<button key={k} onClick={function(){loadBrand(k);}} style={{padding:"6px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>{v.name}</button>);})}</div></div>)}
+        </div>
+      ):(
+      <div>
       {/* Tabs + Rework */}
       <div style={{maxWidth:1200,margin:"8px auto 0",padding:"0 16px",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{["Opt 1","Opt 2","Opt 3"].map(function(lbl,i){return (<button key={i} onClick={function(){setActiveOpt(i);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeOpt===i?"#333":"transparent",color:activeOpt===i?"#fff":"#888",fontWeight:activeOpt===i?700:400,fontSize:13,cursor:"pointer"}}>{lbl}</button>);})}</div>
@@ -1342,6 +1358,7 @@ export default function App() {
         </div>
         <div style={{marginTop:10,fontSize:11,color:"#777",fontFamily:"'Space Mono',monospace",textAlign:"center"}}>PMS Bridge Coated CMYK used where available. All colors WCAG AA 4.5:1.</div>
       </div>
+      </div>)}
       {/* Upload Modal */}
       {showUpload&&(<div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={function(){setShowUpload(false);}}>
         <div style={{backgroundColor:"#fff",borderRadius:12,maxWidth:380,width:"100%",padding:20,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
