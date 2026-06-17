@@ -205,15 +205,30 @@ var DEEM_OPT = [
   [{hue:200,sat:7,lL:70,dL:58},{hue:200,sat:5,lL:52,dL:68},{hue:200,sat:4,lL:34,dL:76}],
 ];
 
-function generatePalettes(brandColors, optIdx, darkBg, reworkSeed) {
-  if (optIdx <= 1 && brandColors.length > 0) {
-    return generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed);
+/* Dynamic contrast ordering for any palette size */
+function makeContrastOrder(n) {
+  var order = [];
+  var half = Math.ceil(n / 2);
+  for (var i = 0; i < half; i++) {
+    order.push(i);
+    if (i + half < n) order.push(i + half);
   }
-  return generateFresh(brandColors, optIdx, darkBg, reworkSeed);
+  return order;
+}
+
+function generatePalettes(brandColors, optIdx, darkBg, reworkSeed, paletteSize) {
+  var ps = paletteSize || 9;
+  if (optIdx <= 1 && brandColors.length > 0) {
+    return generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed, ps);
+  }
+  if (optIdx >= 2 && brandColors.length > 0) {
+    return generateTonedRange(brandColors, optIdx - 2, darkBg, reworkSeed, ps);
+  }
+  return generateFresh(brandColors, optIdx, darkBg, reworkSeed, ps);
 }
 
 /* ═══ OPTION 1 & 2: Brand-first palette ═══ */
-function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
+function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed, paletteSize) {
   var seed = reworkSeed || 0;
   var skipN = optIdx === 1 ? 2 : 0;
 
@@ -353,7 +368,7 @@ function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
     pairedSlots = pairedSlots.slice(off).concat(pairedSlots.slice(0, off));
   }
   var selected = [];
-  for (var si = 0; si < pairedSlots.length && selected.length < 9; si++) {
+  for (var si = 0; si < pairedSlots.length && selected.length < paletteSize; si++) {
     var ps = pairedSlots[si], ok = true;
     for (var ei = 0; ei < selected.length; ei++) {
       /* Relaxed thresholds when both are brand colors */
@@ -368,7 +383,7 @@ function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
   }
 
   /* Phase 5: Fill gaps — seed offsets the target hue for variety on rework */
-  while (selected.length < 9) {
+  while (selected.length < paletteSize) {
     var usedH = selected.map(function(s){return s.hue;}).sort(function(a,b){return a-b;});
     var maxGap = 0, gapMid = 0;
     for (var gi = 0; gi <= usedH.length; gi++) {
@@ -413,7 +428,7 @@ function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
   var spectrum = selected.slice().sort(function(a,b){return a.hue-b.hue;}).map(function(s3,i2){
     return {id:i2, hue:s3.hue, sat:s3.sat, lightHex:s3.lightHex, darkHex:s3.darkHex, label:s3.brand?"~"+s3.name:s3.name, swapped:s3.brand?s3.name:null};
   });
-  var contrastOrder = [0,5,1,6,2,7,3,8,4];
+  var contrastOrder = makeContrastOrder(paletteSize);
   var categorical = contrastOrder.map(function(ci2,ni){
     var s4 = spectrum[ci2];
     return {id:ni, hue:s4.hue, sat:s4.sat, lightHex:s4.lightHex, darkHex:s4.darkHex, label:s4.label, swapped:s4.swapped};
@@ -451,8 +466,19 @@ function generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed) {
 }
 
 /* ═══ OPTION 3: Fresh palette (max 3 brand colors) ═══ */
-function generateFresh(brandColors, optIdx, darkBg, reworkSeed) {
+function generateFresh(brandColors, optIdx, darkBg, reworkSeed, paletteSize) {
   var baseHues = OPT_HUES[optIdx] || OPT_HUES[2];
+  /* Adapt base hues to palette size */
+  if (paletteSize < baseHues.length) {
+    baseHues = baseHues.slice(0, paletteSize);
+  } else if (paletteSize > baseHues.length) {
+    var extra = [];
+    for (var xi = baseHues.length; xi < paletteSize; xi++) {
+      var xhue = (xi * (360 / paletteSize) + 15) % 360;
+      extra.push({hue:xhue, sat:60, label:"H"+Math.round(xhue)+"°"});
+    }
+    baseHues = baseHues.concat(extra);
+  }
   var seed = reworkSeed || 0;
 
   /* Pre-select up to 3 most distinct brand colors */
@@ -526,12 +552,103 @@ function generateFresh(brandColors, optIdx, darkBg, reworkSeed) {
 
   var spectrum = cat.slice().sort(function(a,b){return a.hue-b.hue;});
   var hueSorted = spectrum.slice();
-  var contrastOrder = [0,5,1,6,2,7,3,8,4];
+  var contrastOrder = makeContrastOrder(paletteSize);
   var categorical = contrastOrder.map(function(ci,ni){var s=hueSorted[ci];return {id:ni,hue:s.hue,sat:s.sat,lightHex:s.lightHex,darkHex:s.darkHex,label:s.label,swapped:s.swapped};});
 
   var sem = generateSmartSemantics(spectrum, darkBg);
   var deemBases = DEEM_OPT[optIdx] || DEEM_OPT[0];
   var deem = deemBases.map(function(base,i){var rawL=hsl2hex(base.hue,base.sat,base.lL);var rawD=hsl2hex(base.hue,base.sat,base.dL);return {id:i,hue:base.hue,sat:base.sat,lightHex:adjustForContrast(rawL,"#ffffff",4.5),darkHex:adjustForContrast(rawD,darkBg||"#121212",4.5),label:["Light","Mid","Dark"][i]};});
+
+  return {categorical:categorical, semantic:sem, deemphasis:deem, spectrum:spectrum};
+}
+
+/* ═══ TONED RANGE: tonal variations of selected base colors ═══ */
+function generateTonedRange(brandColors, toneIdx, darkBg, reworkSeed, paletteSize) {
+  var seed = reworkSeed || 0;
+
+  /* Pick chromatic brand colors */
+  var chromatic = [];
+  for (var i = 0; i < brandColors.length; i++) {
+    var bh = hex2hsl(brandColors[i].hex);
+    if (bh.s >= 15 && bh.l > 10 && bh.l < 90) {
+      chromatic.push({hex:brandColors[i].hex, name:brandColors[i].name, hue:bh.h, sat:bh.s, l:bh.l});
+    }
+  }
+  if (chromatic.length === 0) return generateFresh(brandColors, 0, darkBg, reworkSeed, paletteSize);
+
+  /* Determine number of bases: aim for 2-4 tones per base */
+  var numBases = Math.max(2, Math.min(chromatic.length, Math.ceil(paletteSize / 3)));
+  var tonesPerBase = Math.floor(paletteSize / numBases);
+  var remainder = paletteSize - tonesPerBase * numBases;
+
+  /* Select bases: pick most hue-diverse colors */
+  var bases = [chromatic[toneIdx % chromatic.length]]; /* Offset start for tone option 2 */
+  for (var bi = 0; bi < chromatic.length && bases.length < numBases; bi++) {
+    var cand = chromatic[(bi + toneIdx + seed) % chromatic.length];
+    var distinct = true;
+    for (var bj = 0; bj < bases.length; bj++) {
+      if (hueDist(cand.hue, bases[bj].hue) < 30) { distinct = false; break; }
+    }
+    if (distinct) bases.push(cand);
+  }
+  /* Fill remaining bases if not enough brand colors */
+  while (bases.length < numBases) {
+    var gapHue = 0, maxGap = 0;
+    var bHues = bases.map(function(b){return b.hue;}).sort(function(a,b){return a-b;});
+    for (var gi = 0; gi <= bHues.length; gi++) {
+      var lo = gi > 0 ? bHues[gi-1] : bHues[bHues.length-1] - 360;
+      var hi = gi < bHues.length ? bHues[gi] : bHues[0] + 360;
+      if (hi - lo > maxGap) { maxGap = hi - lo; gapHue = ((lo + (hi-lo)/2) % 360 + 360) % 360; }
+    }
+    bases.push({hex:hsl2hex(gapHue,60,45), name:"H"+Math.round(gapHue)+"°", hue:gapHue, sat:60, l:45});
+  }
+
+  /* Sort bases by hue for consistent ordering */
+  bases.sort(function(a,b){return a.hue - b.hue;});
+
+  /* Generate tonal variations for each base */
+  var allSlots = [];
+  for (var ti = 0; ti < bases.length; ti++) {
+    var base = bases[ti];
+    var nTones = tonesPerBase + (ti < remainder ? 1 : 0);
+    /* Generate lightness steps across the range */
+    for (var vi = 0; vi < nTones; vi++) {
+      var t = nTones > 1 ? vi / (nTones - 1) : 0.5;
+      /* Vary lightness: 20% (dark) to 65% (light) */
+      var targetL = 20 + t * 45;
+      /* Vary saturation slightly: ±15 from base */
+      var targetS = Math.min(95, Math.max(25, base.sat + (vi % 2 === 0 ? -8 : 8) * (vi > 0 ? 1 : 0)));
+      /* Slight hue shift for visual distinction: ±3° per step */
+      var targetH = (base.hue + (vi - Math.floor(nTones/2)) * 3 + 360) % 360;
+      var lHex = adjustForContrast(hsl2hex(targetH, targetS, targetL), "#ffffff", 4.5);
+      var dHex = adjustForContrast(hsl2hex(targetH, targetS, targetL), darkBg || "#121212", 4.5);
+      var toneLabel = vi === 0 ? base.name : base.name + " " + (vi + 1);
+      allSlots.push({
+        hue: targetH, sat: targetS, lightHex: lHex, darkHex: dHex,
+        label: toneLabel, swapped: base.name, baseIdx: ti
+      });
+    }
+  }
+
+  /* Build spectrum (hue-sorted) */
+  var spectrum = allSlots.map(function(s, i) {
+    return {id:i, hue:s.hue, sat:s.sat, lightHex:s.lightHex, darkHex:s.darkHex, label:s.label, swapped:s.swapped};
+  });
+
+  /* Build categorical (contrast-interleaved) */
+  var contrastOrder = makeContrastOrder(paletteSize);
+  var categorical = contrastOrder.map(function(ci, ni) {
+    var s = spectrum[ci];
+    return {id:ni, hue:s.hue, sat:s.sat, lightHex:s.lightHex, darkHex:s.darkHex, label:s.label, swapped:s.swapped};
+  });
+
+  var sem = generateSmartSemantics(spectrum, darkBg);
+  var deemBases = DEEM_OPT[0];
+  var deem = deemBases.map(function(db, i) {
+    var rawL = hsl2hex(db.hue, db.sat, db.lL);
+    var rawD = hsl2hex(db.hue, db.sat, db.dL);
+    return {id:i, hue:db.hue, sat:db.sat, lightHex:adjustForContrast(rawL,"#ffffff",4.5), darkHex:adjustForContrast(rawD,darkBg||"#121212",4.5), label:["Light","Mid","Dark"][i]};
+  });
 
   return {categorical:categorical, semantic:sem, deemphasis:deem, spectrum:spectrum};
 }
@@ -619,7 +736,7 @@ function Swatch(props) {
   var onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect,label=props.label;
   var slotId=props.slotId,slotType=props.slotType,isBrand=props.isBrand;
   var bg=isDark?darkBg:"#ffffff"; var ratio=CR(hex,bg); var pass=ratio>=4.5;
-  var btnStyle={position:"absolute",width:20,height:20,borderRadius:10,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:9,fontWeight:700,fontFamily:"'Space Mono',monospace",letterSpacing:0};
+  var btnStyle={position:"absolute",width:15,height:15,borderRadius:8,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:7,fontWeight:700,fontFamily:"'Space Mono',monospace",letterSpacing:0};
   return (
     <div style={{position:"relative",width:96,borderRadius:8,overflow:"hidden",backgroundColor:"#fff",border:"1px solid #eee",flexShrink:0}}>
       <div style={{height:52,backgroundColor:hex,position:"relative",cursor:"pointer",border:"2px solid "+stroke,borderRadius:"6px 6px 0 0",boxSizing:"border-box"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:label,slotId:slotId,slotType:slotType,onHue:onHue,onSat:onSat,onLight:onLight});}}>
@@ -702,9 +819,9 @@ function ColorDetail(props) {
     <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={cancelEdit}>
       <div style={{backgroundColor:"#fff",borderRadius:14,maxWidth:340,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
         <div style={{height:110,backgroundColor:displayHex,color:fg,position:"relative",display:"flex",alignItems:"flex-end",padding:14}}>
-          {info.onHue&&!isEditing&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:26,height:26,borderRadius:13,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Shift hue">H</button>)}
-          {info.onSat&&!isEditing&&(<button onClick={function(){info.onSat();onClose();}} style={{position:"absolute",top:10,left:"50%",transform:"translateX(-50%)",width:26,height:26,borderRadius:13,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Cycle saturation">S</button>)}
-          {info.onLight&&!isEditing&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:26,height:26,borderRadius:13,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:11,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Cycle lightness">L</button>)}
+          {info.onHue&&!isEditing&&(<button onClick={function(){info.onHue();onClose();}} style={{position:"absolute",top:10,left:10,width:20,height:20,borderRadius:10,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:8,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Shift hue">H</button>)}
+          {info.onSat&&!isEditing&&(<button onClick={function(){info.onSat();onClose();}} style={{position:"absolute",top:10,left:"50%",transform:"translateX(-50%)",width:20,height:20,borderRadius:10,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:8,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Cycle saturation">S</button>)}
+          {info.onLight&&!isEditing&&(<button onClick={function(){info.onLight();onClose();}} style={{position:"absolute",top:10,right:10,width:20,height:20,borderRadius:10,backgroundColor:"rgba(0,0,0,0.25)",color:"#fff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,zIndex:2,fontSize:8,fontWeight:700,fontFamily:"'Space Mono',monospace"}} title="Cycle lightness">L</button>)}
           {canEdit&&(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:36,height:36,borderRadius:18,backgroundColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",border:"none"}}>
             <input type="color" value={displayHex} onChange={handleColorInput} style={{position:"absolute",inset:-6,width:"150%",height:"150%",cursor:"pointer",opacity:0}} />
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={fg} strokeOpacity="0.5" strokeWidth="1.5" strokeLinecap="round"><path d="M12 1l3 3-9 9H3v-3z"/><path d="M10 3l3 3"/></svg>
@@ -798,11 +915,11 @@ function CompareView(props) {
 
 /* ═══ MAIN APP ═══ */
 export default function App() {
-  var _brands=useState({}),_actBrand=useState(null),_brandColors=useState([]),_opts=useState([null,null,null]);
+  var _brands=useState({}),_actBrand=useState(null),_brandColors=useState([]),_opts=useState([null,null,null,null]);
   var _actOpt=useState(0),_darkStroke=useState("#032054"),_selInfo=useState(null),_showUpload=useState(false);
   var _uploadName=useState(""),_toast=useState(""),_loaded=useState(false);
   var _compare=useState(false),_brandDD=useState(false),_reworkSeed=useState(0),_pptModal=useState(null);
-  var _undoStack=useState([]);
+  var _undoStack=useState([]),_paletteSize=useState(9);
   var fileRef=useRef(null);
   var brands=_brands[0],setBrands=_brands[1],activeBrand=_actBrand[0],setActiveBrand=_actBrand[1];
   var brandColors=_brandColors[0],setBrandColors=_brandColors[1],opts=_opts[0],setOpts=_opts[1];
@@ -814,28 +931,29 @@ export default function App() {
   var reworkSeed=_reworkSeed[0],setReworkSeed=_reworkSeed[1];
   var pptModal=_pptModal[0],setPptModal=_pptModal[1];
   var undoStack=_undoStack[0],setUndoStack=_undoStack[1];
+  var paletteSize=_paletteSize[0],setPaletteSize=_paletteSize[1];
   function pushUndo(){setUndoStack(function(prev){var next=prev.concat([JSON.stringify(opts)]);if(next.length>30)next=next.slice(next.length-30);return next;});}
   function undo(){setUndoStack(function(prev){if(!prev.length)return prev;var next=prev.slice();var last=next.pop();setOpts(JSON.parse(last));return next;});show("Undo");}
   useEffect(function(){function onKey(e){if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();undo();}}window.addEventListener("keydown",onKey);return function(){window.removeEventListener("keydown",onKey);};},[]);
   function show(msg){setToast(msg);setTimeout(function(){setToast("");},2500);}
-  function regen(bc,ds,seed){setOpts([generatePalettes(bc,0,ds,seed),generatePalettes(bc,1,ds,seed),generatePalettes(bc,2,ds,seed)]);}
+  function regen(bc,ds,seed,ps){var sz=ps||paletteSize;setOpts([generatePalettes(bc,0,ds,seed,sz),generatePalettes(bc,1,ds,seed,sz),generatePalettes(bc,2,ds,seed,sz),generatePalettes(bc,3,ds,seed,sz)]);}
 
   useEffect(function(){sbFetchBrands().then(function(b){setBrands(b);setLoaded(true);});},[]);
-  useEffect(function(){if(!loaded)return;if(!activeBrand){regen([],darkStroke,reworkSeed);setBrandColors([]);}},[loaded,activeBrand]);
+  useEffect(function(){if(!loaded)return;if(!activeBrand){regen([],darkStroke,reworkSeed,paletteSize);setBrandColors([]);}},[loaded,activeBrand]);
 
   var loadBrand=useCallback(function(key){
     setActiveBrand(key); var b=brands[key]; if(!b)return;
     setBrandColors(b.colors); var ds=b.darkStroke||"#032054"; setDarkStroke(ds);
-    if(b.palettes){setOpts(b.palettes);}else{regen(b.colors,ds,0);}
+    if(b.palettes){setOpts(b.palettes);}else{regen(b.colors,ds,0,paletteSize);}
   },[brands]);
 
-  function deleteBrand(key){var nb=Object.assign({},brands);delete nb[key];setBrands(nb);sbDeleteBrand(key);if(activeBrand===key){setActiveBrand(null);setBrandColors([]);regen([],darkStroke,0);}show("Deleted");}
+  function deleteBrand(key){var nb=Object.assign({},brands);delete nb[key];setBrands(nb);sbDeleteBrand(key);if(activeBrand===key){setActiveBrand(null);setBrandColors([]);regen([],darkStroke,0,paletteSize);}show("Deleted");}
 
-  function saveDarkStroke(ds){setDarkStroke(ds);regen(brandColors,ds,reworkSeed);if(activeBrand){var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].darkStroke=ds;setBrands(nb);sbSaveDarkStroke(activeBrand,ds);}}
+  function saveDarkStroke(ds){setDarkStroke(ds);regen(brandColors,ds,reworkSeed,paletteSize);if(activeBrand){var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].darkStroke=ds;setBrands(nb);sbSaveDarkStroke(activeBrand,ds);}}
 
   function savePalettes(){if(activeBrand){sbSavePalettes(activeBrand,opts);var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].palettes=opts;setBrands(nb);show("Saved!");}else{show("Upload a brand first");}}
 
-  function reworkAll(){pushUndo();var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);setOpts(function(prev){var next=prev.slice();next[activeOpt]=generatePalettes(brandColors,activeOpt,darkStroke,newSeed);return next;});show("Reworked Opt "+(activeOpt+1)+"!");}
+  function reworkAll(){pushUndo();var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);setOpts(function(prev){var next=prev.slice();next[activeOpt]=generatePalettes(brandColors,activeOpt,darkStroke,newSeed,paletteSize);return next;});show("Reworked Opt "+(activeOpt+1)+"!");}
 
   function copyPptXml(isDk, includeSpectrum) {
     if (!cur) return;
@@ -1331,7 +1449,8 @@ export default function App() {
       <div>
       {/* Tabs + Rework */}
       <div style={{maxWidth:1200,margin:"8px auto 0",padding:"0 16px",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-        <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{["Opt 1","Opt 2","Opt 3"].map(function(lbl,i){return (<button key={i} onClick={function(){setActiveOpt(i);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeOpt===i?"#333":"transparent",color:activeOpt===i?"#fff":"#888",fontWeight:activeOpt===i?700:400,fontSize:13,cursor:"pointer"}}>{lbl}</button>);})}</div>
+        <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{["Cat 1","Cat 2","Tone 1","Tone 2"].map(function(lbl,i){return (<button key={i} onClick={function(){setActiveOpt(i);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeOpt===i?"#333":"transparent",color:activeOpt===i?"#fff":"#888",fontWeight:activeOpt===i?700:400,fontSize:13,cursor:"pointer"}}>{lbl}</button>);})}</div>
+        <div style={{display:"flex",alignItems:"center",gap:4,backgroundColor:"#fff",borderRadius:6,padding:"2px 8px",border:"1px solid #eee"}}><span style={{fontSize:10,color:"#777",fontFamily:"'Space Mono',monospace",letterSpacing:"0.05em"}}>Colors</span><button onClick={function(){if(paletteSize>4){var ns=paletteSize-1;setPaletteSize(ns);regen(brandColors,darkStroke,reworkSeed,ns);}}} style={{width:22,height:22,border:"none",backgroundColor:"transparent",color:paletteSize>4?"#333":"#ccc",fontSize:16,fontWeight:700,cursor:paletteSize>4?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button><span style={{fontSize:14,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#333",minWidth:18,textAlign:"center"}}>{paletteSize}</span><button onClick={function(){if(paletteSize<12){var ns=paletteSize+1;setPaletteSize(ns);regen(brandColors,darkStroke,reworkSeed,ns);}}} style={{width:22,height:22,border:"none",backgroundColor:"transparent",color:paletteSize<12?"#333":"#ccc",fontSize:16,fontWeight:700,cursor:paletteSize<12?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button></div>
         <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework Colors</button>
         <button onClick={downloadPptx} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
       </div>
