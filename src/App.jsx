@@ -216,13 +216,13 @@ function makeContrastOrder(n) {
   return order;
 }
 
-function generatePalettes(brandColors, optIdx, darkBg, reworkSeed, paletteSize) {
+function generatePalettes(brandColors, optIdx, darkBg, reworkSeed, paletteSize, toneBases, toneReverse) {
   var ps = paletteSize || 9;
   if (optIdx <= 1 && brandColors.length > 0) {
     return generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed, ps);
   }
   if (optIdx >= 2 && brandColors.length > 0) {
-    return generateTonedRange(brandColors, optIdx - 2, darkBg, reworkSeed, ps);
+    return generateTonedRange(brandColors, optIdx - 2, darkBg, reworkSeed, ps, toneBases, toneReverse);
   }
   return generateFresh(brandColors, optIdx, darkBg, reworkSeed, ps);
 }
@@ -563,83 +563,81 @@ function generateFresh(brandColors, optIdx, darkBg, reworkSeed, paletteSize) {
 }
 
 /* ═══ TONED RANGE: tonal variations of selected base colors ═══ */
-function generateTonedRange(brandColors, toneIdx, darkBg, reworkSeed, paletteSize) {
+/* selectedBases: optional array of {hex, name, isBrand} the user picked.    */
+/* reverse: false => ramp runs dark→light; true => light→dark.               */
+function generateTonedRange(brandColors, toneIdx, darkBg, reworkSeed, paletteSize, selectedBases, reverse) {
   var seed = reworkSeed || 0;
+  var bases = [];
 
-  /* Pick chromatic brand colors */
-  var chromatic = [];
-  for (var i = 0; i < brandColors.length; i++) {
-    var bh = hex2hsl(brandColors[i].hex);
-    if (bh.s >= 15 && bh.l > 10 && bh.l < 90) {
-      chromatic.push({hex:brandColors[i].hex, name:brandColors[i].name, hue:bh.h, sat:bh.s, l:bh.l});
+  if (selectedBases && selectedBases.length > 0) {
+    /* Use the exact colors the user chose, in their chosen order */
+    for (var ui = 0; ui < selectedBases.length; ui++) {
+      var uh = hex2hsl(selectedBases[ui].hex);
+      bases.push({
+        hex: selectedBases[ui].hex,
+        name: selectedBases[ui].name || ("H" + Math.round(uh.h) + "°"),
+        hue: uh.h, sat: uh.s, l: uh.l,
+        isBrand: selectedBases[ui].isBrand !== false
+      });
     }
-  }
-  if (chromatic.length === 0) return generateFresh(brandColors, 0, darkBg, reworkSeed, paletteSize);
-
-  /* Determine number of bases: aim for 2-4 tones per base */
-  var numBases = Math.max(2, Math.min(chromatic.length, Math.ceil(paletteSize / 3)));
-  var tonesPerBase = Math.floor(paletteSize / numBases);
-  var remainder = paletteSize - tonesPerBase * numBases;
-
-  /* Select bases: pick most hue-diverse colors */
-  var bases = [chromatic[toneIdx % chromatic.length]]; /* Offset start for tone option 2 */
-  for (var bi = 0; bi < chromatic.length && bases.length < numBases; bi++) {
-    var cand = chromatic[(bi + toneIdx + seed) % chromatic.length];
-    var distinct = true;
-    for (var bj = 0; bj < bases.length; bj++) {
-      if (hueDist(cand.hue, bases[bj].hue) < 30) { distinct = false; break; }
+  } else {
+    /* Legacy fallback: auto-select the most hue-diverse brand colors */
+    var chromatic = [];
+    for (var i = 0; i < brandColors.length; i++) {
+      var bh = hex2hsl(brandColors[i].hex);
+      if (bh.s >= 15 && bh.l > 10 && bh.l < 90) {
+        chromatic.push({hex:brandColors[i].hex, name:brandColors[i].name, hue:bh.h, sat:bh.s, l:bh.l, isBrand:true});
+      }
     }
-    if (distinct) bases.push(cand);
-  }
-  /* Fill remaining bases if not enough brand colors */
-  while (bases.length < numBases) {
-    var gapHue = 0, maxGap = 0;
-    var bHues = bases.map(function(b){return b.hue;}).sort(function(a,b){return a-b;});
-    for (var gi = 0; gi <= bHues.length; gi++) {
-      var lo = gi > 0 ? bHues[gi-1] : bHues[bHues.length-1] - 360;
-      var hi = gi < bHues.length ? bHues[gi] : bHues[0] + 360;
-      if (hi - lo > maxGap) { maxGap = hi - lo; gapHue = ((lo + (hi-lo)/2) % 360 + 360) % 360; }
+    if (chromatic.length === 0) return generateFresh(brandColors, 0, darkBg, reworkSeed, paletteSize);
+    var numBases = Math.max(2, Math.min(chromatic.length, Math.ceil(paletteSize / 3)));
+    bases.push(chromatic[toneIdx % chromatic.length]);
+    for (var bi = 0; bi < chromatic.length && bases.length < numBases; bi++) {
+      var cand = chromatic[(bi + toneIdx + seed) % chromatic.length];
+      var distinct = true;
+      for (var bj = 0; bj < bases.length; bj++) {
+        if (hueDist(cand.hue, bases[bj].hue) < 30) { distinct = false; break; }
+      }
+      if (distinct) bases.push(cand);
     }
-    bases.push({hex:hsl2hex(gapHue,60,45), name:"H"+Math.round(gapHue)+"°", hue:gapHue, sat:60, l:45});
+    bases.sort(function(a,b){return a.hue - b.hue;});
   }
 
-  /* Sort bases by hue for consistent ordering */
-  bases.sort(function(a,b){return a.hue - b.hue;});
+  var nb = bases.length;
+  /* Distribute palette size across bases; remainder goes to earlier bases */
+  var tonesPerBase = Math.floor(paletteSize / nb);
+  var remainder = paletteSize - tonesPerBase * nb;
 
-  /* Generate tonal variations for each base */
+  /* Generate a tonal ramp per base, grouped in base order */
   var allSlots = [];
-  for (var ti = 0; ti < bases.length; ti++) {
+  for (var ti = 0; ti < nb; ti++) {
     var base = bases[ti];
     var nTones = tonesPerBase + (ti < remainder ? 1 : 0);
-    /* Generate lightness steps across the range */
+    if (nTones < 1) nTones = 1;
     for (var vi = 0; vi < nTones; vi++) {
-      var t = nTones > 1 ? vi / (nTones - 1) : 0.5;
-      /* Vary lightness: 20% (dark) to 65% (light) */
-      var targetL = 20 + t * 45;
-      /* Vary saturation slightly: ±15 from base */
-      var targetS = Math.min(95, Math.max(25, base.sat + (vi % 2 === 0 ? -8 : 8) * (vi > 0 ? 1 : 0)));
-      /* Slight hue shift for visual distinction: ±3° per step */
-      var targetH = (base.hue + (vi - Math.floor(nTones/2)) * 3 + 360) % 360;
+      var t = nTones > 1 ? vi / (nTones - 1) : 0.4;
+      /* Direction: dark→light by default, reversed to light→dark on toggle */
+      var lf = reverse ? (1 - t) : t;
+      var targetL = 24 + lf * 56;                 /* 24% (dark) → 80% (light) */
+      var targetS = Math.min(95, Math.max(20, base.sat - Math.round((1 - lf) * 6)));
+      var targetH = base.hue;                     /* hue fixed → reads as same family */
       var lHex = adjustForContrast(hsl2hex(targetH, targetS, targetL), "#ffffff", 4.5);
       var dHex = adjustForContrast(hsl2hex(targetH, targetS, targetL), darkBg || "#121212", 4.5);
-      var toneLabel = vi === 0 ? base.name : base.name + " " + (vi + 1);
+      var toneLabel = nTones === 1 ? base.name : base.name + " " + (vi + 1);
       allSlots.push({
         hue: targetH, sat: targetS, lightHex: lHex, darkHex: dHex,
-        label: toneLabel, swapped: base.name, baseIdx: ti
+        label: toneLabel, swapped: base.isBrand ? base.name : null, baseIdx: ti
       });
     }
   }
 
-  /* Build spectrum (hue-sorted) */
+  /* Spectrum = tonal ramp grouped by base (no contrast interleaving). */
+  /* Categorical mirrors it so charts, tables and PPTX stay consistent. */
   var spectrum = allSlots.map(function(s, i) {
-    return {id:i, hue:s.hue, sat:s.sat, lightHex:s.lightHex, darkHex:s.darkHex, label:s.label, swapped:s.swapped};
+    return {id:i, hue:s.hue, sat:s.sat, lightHex:s.lightHex, darkHex:s.darkHex, label:s.label, swapped:s.swapped, baseIdx:s.baseIdx};
   });
-
-  /* Build categorical (contrast-interleaved) */
-  var contrastOrder = makeContrastOrder(paletteSize);
-  var categorical = contrastOrder.map(function(ci, ni) {
-    var s = spectrum[ci];
-    return {id:ni, hue:s.hue, sat:s.sat, lightHex:s.lightHex, darkHex:s.darkHex, label:s.label, swapped:s.swapped};
+  var categorical = allSlots.map(function(s, i) {
+    return {id:i, hue:s.hue, sat:s.sat, lightHex:s.lightHex, darkHex:s.darkHex, label:s.label, swapped:s.swapped, baseIdx:s.baseIdx};
   });
 
   var sem = generateSmartSemantics(spectrum, darkBg);
@@ -650,7 +648,9 @@ function generateTonedRange(brandColors, toneIdx, darkBg, reworkSeed, paletteSiz
     return {id:i, hue:db.hue, sat:db.sat, lightHex:adjustForContrast(rawL,"#ffffff",4.5), darkHex:adjustForContrast(rawD,darkBg||"#121212",4.5), label:["Light","Mid","Dark"][i]};
   });
 
-  return {categorical:categorical, semantic:sem, deemphasis:deem, spectrum:spectrum};
+  /* Record config so the user's selection can be restored after save/load */
+  var usedBases = bases.map(function(b){return {hex:b.hex, name:b.name, isBrand:!!b.isBrand};});
+  return {categorical:categorical, semantic:sem, deemphasis:deem, spectrum:spectrum, isTone:true, bases:usedBases, reverse:!!reverse};
 }
 
 /* ═══ SUPABASE STORAGE ═══ */
@@ -755,7 +755,7 @@ function Swatch(props) {
 
 /* ═══ OPTION PANEL ═══ */
 function OptionPanel(props) {
-  var pal=props.pal,isDark=props.isDark,stroke=props.stroke,darkBg=props.darkBg;
+  var pal=props.pal,isDark=props.isDark,stroke=props.stroke,darkBg=props.darkBg,isTone=props.isTone;
   var onHue=props.onHue,onSat=props.onSat,onLight=props.onLight,onSelect=props.onSelect;
   var mode=isDark?"D":"L"; var catSlots=pal.categorical||[]; var specSlots=pal.spectrum||[]; var semSlots=pal.semantic||[]; var deemSlots=pal.deemphasis||[];
   function SL(lp){return (<div style={{marginBottom:4,marginTop:14,display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:"0.08em",color:"#555"}}>{lp.text}</span>{lp.sub&&<span style={{fontSize:12,color:"#777",fontFamily:"'Space Mono',monospace"}}>{lp.sub}</span>}</div>);}
@@ -767,6 +767,11 @@ function OptionPanel(props) {
         <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:21,letterSpacing:"0.08em",color:"#222"}}>{mode} · {stroke==="#ffffff"?"White":"Dark"} Stroke</span>
         <span style={{fontSize:12,color:"#777",fontFamily:"'Space Mono',monospace"}}>AA 4.5:1 vs {isDark?darkBg:"#FFF"}</span>
       </div>
+      {isTone?(<div>
+        <SL text="Spectrum" sub="tonal range" />
+        <div style={{display:"flex",height:24,borderRadius:4,overflow:"hidden",marginBottom:8}}>{catSlots.map(function(s,i){return <div key={i} style={{flex:1,backgroundColor:isDark?s.darkHex:s.lightHex}} />;})}</div>
+        {renderSwatches(catSlots,"categorical")}
+      </div>):(<div>
       <SL text="Categorical" sub="max neighbor contrast" />
       {renderSwatches(catSlots,"categorical")}
       {(<div>
@@ -775,6 +780,7 @@ function OptionPanel(props) {
           <div style={{display:"flex",height:24,borderRadius:4,overflow:"hidden",marginBottom:6}}>{specSlots.map(function(s,i){return <div key={i} style={{flex:1,backgroundColor:isDark?s.darkHex:s.lightHex}} />;})}</div>
           <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{specSlots.map(function(s,i){var hex=isDark?s.darkHex:s.lightHex;return (<div key={i} style={{width:26,height:26,borderRadius:4,backgroundColor:hex,border:"1.5px solid "+stroke,boxSizing:"border-box",cursor:"pointer"}} onClick={function(){if(onSelect)onSelect({hex:hex,label:s.label,slotId:s.id,slotType:"spectrum"});}} title={hex} />);})}</div>
         </div>
+      </div>)}
       </div>)}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
         <BarChart slots={catSlots} dark={false} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><DonutChart slots={catSlots} dark={false} stroke={stroke} darkBg={darkBg} useLight={!isDark} /><LineChart slots={catSlots} dark={false} darkBg={darkBg} useLight={!isDark} />
@@ -920,6 +926,7 @@ export default function App() {
   var _uploadName=useState(""),_toast=useState(""),_loaded=useState(false);
   var _compare=useState(false),_brandDD=useState(false),_reworkSeed=useState(0),_pptModal=useState(null);
   var _undoStack=useState([]),_paletteSize=useState(9);
+  var _toneBases=useState({2:[],3:[]}),_toneReverse=useState({2:false,3:false}),_customHex=useState("#3366cc");
   var fileRef=useRef(null);
   var brands=_brands[0],setBrands=_brands[1],activeBrand=_actBrand[0],setActiveBrand=_actBrand[1];
   var brandColors=_brandColors[0],setBrandColors=_brandColors[1],opts=_opts[0],setOpts=_opts[1];
@@ -932,11 +939,14 @@ export default function App() {
   var pptModal=_pptModal[0],setPptModal=_pptModal[1];
   var undoStack=_undoStack[0],setUndoStack=_undoStack[1];
   var paletteSize=_paletteSize[0],setPaletteSize=_paletteSize[1];
+  var toneBases=_toneBases[0],setToneBases=_toneBases[1];
+  var toneReverse=_toneReverse[0],setToneReverse=_toneReverse[1];
+  var customHex=_customHex[0],setCustomHex=_customHex[1];
   function pushUndo(){setUndoStack(function(prev){var next=prev.concat([JSON.stringify(opts)]);if(next.length>30)next=next.slice(next.length-30);return next;});}
   function undo(){setUndoStack(function(prev){if(!prev.length)return prev;var next=prev.slice();var last=next.pop();setOpts(JSON.parse(last));return next;});show("Undo");}
   useEffect(function(){function onKey(e){if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();undo();}}window.addEventListener("keydown",onKey);return function(){window.removeEventListener("keydown",onKey);};},[]);
   function show(msg){setToast(msg);setTimeout(function(){setToast("");},2500);}
-  function regen(bc,ds,seed,ps){var sz=ps||paletteSize;setOpts([generatePalettes(bc,0,ds,seed,sz),generatePalettes(bc,1,ds,seed,sz),generatePalettes(bc,2,ds,seed,sz),generatePalettes(bc,3,ds,seed,sz)]);}
+  function regen(bc,ds,seed,ps,tb,tr){var sz=ps||paletteSize;var b=tb||toneBases;var r=tr||toneReverse;setOpts([generatePalettes(bc,0,ds,seed,sz),generatePalettes(bc,1,ds,seed,sz),generatePalettes(bc,2,ds,seed,sz,b[2],r[2]),generatePalettes(bc,3,ds,seed,sz,b[3],r[3])]);}
 
   useEffect(function(){sbFetchBrands().then(function(b){setBrands(b);setLoaded(true);});},[]);
   useEffect(function(){if(!loaded)return;if(!activeBrand){regen([],darkStroke,reworkSeed,paletteSize);setBrandColors([]);}},[loaded,activeBrand]);
@@ -944,7 +954,19 @@ export default function App() {
   var loadBrand=useCallback(function(key){
     setActiveBrand(key); var b=brands[key]; if(!b)return;
     setBrandColors(b.colors); var ds=b.darkStroke||"#032054"; setDarkStroke(ds);
-    if(b.palettes){setOpts(b.palettes);}else{regen(b.colors,ds,0,paletteSize);}
+    if(b.palettes){
+      var p=b.palettes.slice();
+      /* Backwards compat: pad older 3-element saved palettes up to 4 options */
+      while(p.length<4){p.push(generatePalettes(b.colors,p.length,ds,0,paletteSize));}
+      setOpts(p);
+      /* Restore tone base selection + ramp direction from the saved palettes */
+      var nb={2:[],3:[]},nr={2:false,3:false};
+      [2,3].forEach(function(oi){if(p[oi]&&p[oi].bases)nb[oi]=p[oi].bases;if(p[oi]&&p[oi].reverse)nr[oi]=true;});
+      setToneBases(nb);setToneReverse(nr);
+    }else{
+      setToneBases({2:[],3:[]});setToneReverse({2:false,3:false});
+      regen(b.colors,ds,0,paletteSize,{2:[],3:[]},{2:false,3:false});
+    }
   },[brands]);
 
   function deleteBrand(key){var nb=Object.assign({},brands);delete nb[key];setBrands(nb);sbDeleteBrand(key);if(activeBrand===key){setActiveBrand(null);setBrandColors([]);regen([],darkStroke,0,paletteSize);}show("Deleted");}
@@ -953,7 +975,13 @@ export default function App() {
 
   function savePalettes(){if(activeBrand){sbSavePalettes(activeBrand,opts);var nb=Object.assign({},brands);if(nb[activeBrand])nb[activeBrand].palettes=opts;setBrands(nb);show("Saved!");}else{show("Upload a brand first");}}
 
-  function reworkAll(){pushUndo();var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);setOpts(function(prev){var next=prev.slice();next[activeOpt]=generatePalettes(brandColors,activeOpt,darkStroke,newSeed,paletteSize);return next;});show("Reworked Opt "+(activeOpt+1)+"!");}
+  function reworkAll(){pushUndo();var newSeed=reworkSeed+1+Math.floor(Math.random()*5);setReworkSeed(newSeed);setOpts(function(prev){var next=prev.slice();next[activeOpt]=generatePalettes(brandColors,activeOpt,darkStroke,newSeed,paletteSize,toneBases[activeOpt],toneReverse[activeOpt]);return next;});show("Reworked Opt "+(activeOpt+1)+"!");}
+
+  /* Regenerate just one tone option after its bases / direction change */
+  function regenTone(oi,bases,rev){setOpts(function(prev){var next=prev.slice();next[oi]=generatePalettes(brandColors,oi,darkStroke,reworkSeed,paletteSize,bases,rev);return next;});}
+  function setToneBasesFor(oi,bases){var nb=Object.assign({},toneBases);nb[oi]=bases;setToneBases(nb);regenTone(oi,bases,toneReverse[oi]);}
+  function toggleToneBase(oi,color){var cur=(toneBases[oi]||[]).slice();var found=-1;for(var i=0;i<cur.length;i++){if(cur[i].hex.toLowerCase()===color.hex.toLowerCase()){found=i;break;}}if(found>=0){cur.splice(found,1);}else{cur.push(color);}setToneBasesFor(oi,cur);}
+  function setToneReverseFor(oi,val){var nr=Object.assign({},toneReverse);nr[oi]=val;setToneReverse(nr);regenTone(oi,toneBases[oi],val);}
 
   function copyPptXml(isDk, includeSpectrum) {
     if (!cur) return;
@@ -1454,11 +1482,36 @@ export default function App() {
         <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework Colors</button>
         <button onClick={downloadPptx} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
       </div>
+      {/* Tone base selector (Tone tabs only) */}
+      {activeOpt>=2&&(function(){
+        var sel=toneBases[activeOpt]||[];
+        function isSel(hex){for(var i=0;i<sel.length;i++){if(sel[i].hex.toLowerCase()===hex.toLowerCase())return true;}return false;}
+        var nb=sel.length;
+        var dist=[];
+        if(nb>0){var per=Math.floor(paletteSize/nb);var rem=paletteSize-per*nb;for(var di=0;di<nb;di++){dist.push(per+(di<rem?1:0));}}
+        var lbl={fontSize:11,fontFamily:"'Space Mono',monospace",color:"#666",letterSpacing:"0.1em",textTransform:"uppercase"};
+        return (<div style={{maxWidth:1200,margin:"8px auto 0",padding:"0 16px"}}>
+          <div style={{backgroundColor:"#fff",borderRadius:10,padding:"10px 14px",border:"1px solid #eee",display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
+            <span style={lbl}>Tone Bases</span>
+            {brandColors.length>0&&(<div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>{brandColors.map(function(c,i){var on=isSel(c.hex);return (<div key={i} onClick={function(){toggleToneBase(activeOpt,{hex:c.hex,name:c.name,isBrand:true});}} title={c.name} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px 3px 4px",borderRadius:20,border:on?"2px solid #ff8800":"1px solid #ddd",backgroundColor:on?"#fff5e6":"#fafafa",cursor:"pointer"}}><div style={{width:18,height:18,borderRadius:9,backgroundColor:c.hex,border:"1px solid rgba(0,0,0,0.1)"}} /><span style={{fontSize:11,fontFamily:"'Outfit',sans-serif",color:"#444",fontWeight:on?700:400}}>{c.name}</span></div>);})}</div>)}
+            {/* Custom-color bases (non-brand) */}
+            {sel.filter(function(s){return s.isBrand===false;}).map(function(s,i){return (<div key={"c"+i} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 6px 3px 4px",borderRadius:20,border:"2px solid #ff8800",backgroundColor:"#fff5e6"}}><div style={{width:18,height:18,borderRadius:9,backgroundColor:s.hex,border:"1px solid rgba(0,0,0,0.1)"}} /><span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#444"}}>{s.hex.toUpperCase()}</span><button onClick={function(){toggleToneBase(activeOpt,{hex:s.hex,name:s.hex,isBrand:false});}} style={{border:"none",background:"transparent",color:"#999",fontSize:15,lineHeight:1,cursor:"pointer",padding:0}}>&times;</button></div>);})}
+            {/* Add custom color */}
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <div style={{position:"relative",width:24,height:24,borderRadius:6,backgroundColor:customHex,border:"2px solid #ddd",cursor:"pointer",overflow:"hidden"}}><input type="color" value={customHex} onChange={function(e){setCustomHex(e.target.value);}} style={{position:"absolute",inset:-4,width:"140%",height:"140%",cursor:"pointer",opacity:0}} /></div>
+              <button onClick={function(){if(!isSel(customHex))toggleToneBase(activeOpt,{hex:customHex,name:customHex,isBrand:false});}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Custom</button>
+            </div>
+            {/* Reverse direction */}
+            <button onClick={function(){setToneReverseFor(activeOpt,!toneReverse[activeOpt]);}} style={{marginLeft:"auto",padding:"4px 12px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Space Mono',monospace"}}>{toneReverse[activeOpt]?"Light → Dark":"Dark → Light"}</button>
+            <span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#999"}}>{nb===0?"auto-selected bases":dist.join(" + ")+" tones"}</span>
+          </div>
+        </div>);
+      })()}
       {/* L and D side by side */}
       <div style={{maxWidth:1200,margin:"12px auto 0",padding:"0 16px 40px"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          <OptionPanel pal={cur} isDark={false} stroke="#ffffff" darkBg={darkStroke} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
-          <OptionPanel pal={cur} isDark={true} stroke={darkStroke} darkBg={darkStroke} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
+          <OptionPanel pal={cur} isDark={false} isTone={activeOpt>=2} stroke="#ffffff" darkBg={darkStroke} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
+          <OptionPanel pal={cur} isDark={true} isTone={activeOpt>=2} stroke={darkStroke} darkBg={darkStroke} onHue={function(type,id){hueShift(activeOpt,type,id);}} onSat={function(type,id){satShift(activeOpt,type,id);}} onLight={function(type,id){lightShift(activeOpt,type,id);}} onSelect={setSelInfo} />
         </div>
         {/* Color Tables */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:16}}>
