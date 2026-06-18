@@ -836,6 +836,7 @@ function OptionPanel(props) {
 /* ═══ COLOR DETAIL MODAL ═══ */
 function ColorDetail(props) {
   var info=props.info,onClose=props.onClose,onSetHSL=props.onSetHSL,brandColors=props.brandColors||[];
+  var paletteColors=props.paletteColors||[];
   var _pending=useState(null); var pending=_pending[0],setPending=_pending[1];
   if(!info) return null;
   var displayHex=pending||info.hex;
@@ -887,6 +888,18 @@ function ColorDetail(props) {
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{brandColors.map(function(c,i){
               var isActive=displayHex.toLowerCase()===c.hex.toLowerCase();
               return (<div key={i} onClick={function(){selectBrandColor(c.hex);}} style={{width:28,height:28,borderRadius:5,backgroundColor:c.hex,border:isActive?"2px solid #ff8800":"1.5px solid #ddd",cursor:"pointer",boxSizing:"border-box"}} title={c.name+" "+c.hex} />);
+            })}</div>
+          </div>)}
+          {/* Sample a color from the data-vis palette spectrum */}
+          {canEdit&&paletteColors.length>0&&(<div style={{borderTop:"1px solid #eee",paddingTop:8,marginTop:8}}>
+            <span style={{fontSize:10,fontFamily:"'Space Mono',monospace",color:"#777",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:5}}>Palette</span>
+            <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{paletteColors.map(function(s,i){
+              var hexL=s.lightHex,hexD=s.darkHex;
+              var isActive=displayHex.toLowerCase()===hexL.toLowerCase()||displayHex.toLowerCase()===hexD.toLowerCase();
+              return (<div key={i} onClick={function(){selectBrandColor(hexL);}} style={{width:28,height:28,borderRadius:5,overflow:"hidden",display:"flex",border:isActive?"2px solid #ff8800":"1.5px solid #ddd",cursor:"pointer",boxSizing:"border-box"}} title={(s.label||hexL)+" — click for light, or use the dark half"}>
+                <div onClick={function(e){e.stopPropagation();selectBrandColor(hexL);}} style={{width:"50%",height:"100%",backgroundColor:hexL}} />
+                <div onClick={function(e){e.stopPropagation();selectBrandColor(hexD);}} style={{width:"50%",height:"100%",backgroundColor:hexD}} />
+              </div>);
             })}</div>
           </div>)}
           {/* OK / Cancel when editing, or just Close */}
@@ -1113,6 +1126,8 @@ export default function App() {
       xml = xml.split('val="000063"').join('val="' + NDARK + '"');
       xml = xml.split("HAP").join(brandName);
       xml = xml.split("Option 1").join(optionLabel);
+      /* Thicken swatch outlines (template strokes have no explicit width) */
+      xml = xml.split("<a:ln><a:solidFill>").join('<a:ln w="19050"><a:solidFill>');
       return xml;
     }
 
@@ -1185,6 +1200,13 @@ export default function App() {
         for (var n = 1; n <= 8; n++) { srcChart[n] = src["ppt/charts/chart"+n+".xml"]; srcChartRels[n] = src["ppt/charts/_rels/chart"+n+".xml.rels"]; }
         var ct = src["[Content_Types].xml"], presRels = src["ppt/_rels/presentation.xml.rels"], pres = src["ppt/presentation.xml"];
 
+        /* Preload the source chart embeddings (binary) so every cloned chart can */
+        /* get its OWN copy — PowerPoint breaks when charts share one workbook.   */
+        var embSet = {};
+        for (var en = 1; en <= 8; en++) { var emm = srcChartRels[en].match(/embeddings\/([^"]+)/); if (emm) embSet[emm[1]] = true; }
+        return Promise.all(Object.keys(embSet).map(function(nm) { return zip.file("ppt/embeddings/"+nm).async("uint8array").then(function(d){ return {nm:nm, d:d}; }); })).then(function(embList) {
+        var srcEmbData = {}; for (var ed = 0; ed < embList.length; ed++) srcEmbData[embList[ed].nm] = embList[ed].d;
+
         var chartCounter = 100, slideCounter = 100, ridCounter = 1001, sldIdCounter = 300;
         var newSlideRels = [], sldIds = [], ctOverrides = [];
 
@@ -1201,7 +1223,15 @@ export default function App() {
             var cn = parseInt(matches[mi].replace(/\D/g,""), 10);
             var newCn = chartCounter++;
             zip.file("ppt/charts/chart"+newCn+".xml", processChart(srcChart[cn], seriesArr));
-            zip.file("ppt/charts/_rels/chart"+newCn+".xml.rels", srcChartRels[cn]);
+            /* Give this chart its own embedding copy (unique workbook per chart) */
+            var emm2 = srcChartRels[cn].match(/embeddings\/([^"]+)/);
+            var chartRelsXml = srcChartRels[cn];
+            if (emm2 && srcEmbData[emm2[1]]) {
+              var newEmb = "dvp_" + newCn + ".xlsx";
+              zip.file("ppt/embeddings/" + newEmb, srcEmbData[emm2[1]]);
+              chartRelsXml = chartRelsXml.replace(/embeddings\/[^"]+/, "embeddings/" + newEmb);
+            }
+            zip.file("ppt/charts/_rels/chart"+newCn+".xml.rels", chartRelsXml);
             ctOverrides.push('<Override PartName="/ppt/charts/chart'+newCn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>');
             relsXml = relsXml.split("/charts/chart"+cn+".xml").join("/charts/chart"+newCn+".xml");
           }
@@ -1232,7 +1262,11 @@ export default function App() {
         var dropParts = [];
         for (var d1 = 1; d1 <= 3; d1++) { dropParts.push("ppt/slides/slide"+d1+".xml","ppt/slides/_rels/slide"+d1+".xml.rels"); }
         for (var d2 = 1; d2 <= 16; d2++) { dropParts.push("ppt/charts/chart"+d2+".xml","ppt/charts/_rels/chart"+d2+".xml.rels"); }
-        zip.forEach(function(p) { if (p.indexOf("ppt/notesSlides/") === 0) dropParts.push(p); });
+        zip.forEach(function(p) {
+          if (p.indexOf("ppt/notesSlides/") === 0) dropParts.push(p);
+          /* original embeddings are now orphaned — clones use dvp_* copies */
+          if (p.indexOf("ppt/embeddings/") === 0 && p.indexOf("ppt/embeddings/dvp_") !== 0) dropParts.push(p);
+        });
         for (var dp = 0; dp < dropParts.length; dp++) { if (zip.file(dropParts[dp])) zip.remove(dropParts[dp]); }
         function dropOverride(part) { ct = ct.replace(new RegExp('<Override PartName="/'+part.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+'"[^>]*/>'), ""); }
         for (var o1 = 1; o1 <= 3; o1++) dropOverride("ppt/slides/slide"+o1+".xml");
@@ -1248,6 +1282,7 @@ export default function App() {
         zip.file("ppt/_rels/presentation.xml.rels", presRels);
         zip.file("ppt/presentation.xml", pres);
         return zip;
+        });
       });
     }).then(function(zip) {
       return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
@@ -1676,7 +1711,7 @@ export default function App() {
         </div>);
       })()}
 
-      {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} brandColors={brandColors} />}
+      {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} brandColors={brandColors} paletteColors={cur?cur.spectrum:[]} />}
     </div>
   );
 }
