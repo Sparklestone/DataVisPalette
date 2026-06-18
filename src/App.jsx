@@ -1254,7 +1254,8 @@ export default function App() {
         function cloneOptionSlide(optIdx, isDark) {
           var A = arraysFor(opts[optIdx]);
           var slideMap = isDark ? [].concat(A.NDC,A.NDS,A.NDDEEM,A.NDSEM,A.NDDEEM,A.NDSEM) : [].concat(A.NLC,A.NLS,A.NLDEEM,A.NLSEM,A.NLDEEM,A.NLSEM);
-          var seriesArr = isDark ? A.NDS : A.NLS;
+          /* Charts use categorical order (not spectrum) */
+          var seriesArr = isDark ? A.NDC : A.NLC;
           var srcN = isDark ? 2 : 1;
           var label = OPT_LABELS[optIdx] + (isDark ? " · Dark" : " · Light");
           var slideXml = processSlide(srcSlide[srcN], slideMap, label);
@@ -1323,7 +1324,7 @@ export default function App() {
             var nr = rows.length, sub = ch/nr;
             for (var ri = 0; ri < nr; ri++) { var sH = Math.min(sub*0.66, swColW/9); swRow(rows[ri], cx, cy+ri*sub+(sub-sH)/2, swColW, sH, dark); }
             /* Chart series: categorical order for categorical, tonal order for tonal */
-            var barW = chColW*0.52, dnW = chColW*0.46, cgap = chColW*0.02, ser = isTonal ? (dark?A.NDS:A.NLS) : (dark?A.NDC:A.NLC);
+            var barW = chColW*0.52, dnW = chColW*0.46, cgap = chColW*0.02, ser = dark ? A.NDC : A.NLC;
             addChart(dark?7:1, ser, chX, cy, barW, ch);
             addChart(dark?8:2, ser, chX+barW+cgap, cy, dnW, ch);
           }
