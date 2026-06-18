@@ -1285,67 +1285,76 @@ export default function App() {
           sldIds.push('<p:sldId id="'+(sldIdCounter++)+'" r:id="'+rid+'"/>');
         }
 
-        var summaryGroups = [];
-        for (var ci = 0; ci < chosen.length; ci++) {
-          var oi = chosen[ci];
-          if (sel.light) cloneOptionSlide(oi, false);
-          if (sel.dark)  cloneOptionSlide(oi, true);
-          summaryGroups.push({label: OPT_LABELS[oi], A: arraysFor(opts[oi])});
+        /* Build one spacious summary slide for a set of option groups (Light left,
+           Dark right; each cell = Categorical + Spectrum rows + Semantic/Deemphasis
+           row + real bar & donut charts). */
+        function buildSummary(grps, title) {
+          if (!grps.length) return;
+          var sumShapes = [], sumGF = [], sid = 300, sumRid = 2;
+          var sumRels = ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout32.xml"/>'];
+          function S(x,y,w,h,fill,stroke,sw) { sumShapes.push(rectSp(sid++, x, y, w, h, fill, stroke, sw)); }
+          function T(x,y,w,h,t,sz,b,color,anchor) { sumShapes.push(textSp(sid++, x, y, w, h, t, sz, b, color, anchor)); }
+          function swRow(colors, x, y, w, h, dark) { var n = colors.length, g = 20000, sw = (w - g*(n-1))/n; for (var i = 0; i < n; i++) S(x+i*(sw+g), y, sw, h, colors[i], dark?NDARK:"FFFFFF", 12700); }
+          function addChart(srcCn, seriesArr, x, y, w, h) {
+            var newCn = chartCounter++;
+            zip.file("ppt/charts/chart"+newCn+".xml", processChart(srcChart[srcCn], seriesArr));
+            var emm3 = srcChartRels[srcCn].match(/embeddings\/([^"]+)/), cr3 = srcChartRels[srcCn];
+            if (emm3 && srcEmbData[emm3[1]]) { var ne3 = "dvp_" + newCn + ".xlsx"; zip.file("ppt/embeddings/" + ne3, srcEmbData[emm3[1]]); cr3 = cr3.replace(/embeddings\/[^"]+/, "embeddings/" + ne3); }
+            zip.file("ppt/charts/_rels/chart"+newCn+".xml.rels", cr3);
+            ctOverrides.push('<Override PartName="/ppt/charts/chart'+newCn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>');
+            var rid = "rId" + (sumRid++);
+            sumRels.push('<Relationship Id="'+rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart'+newCn+'.xml"/>');
+            sumGF.push('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="'+(sid++)+'" name="c'+newCn+'"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="'+Math.round(x)+'" y="'+Math.round(y)+'"/><a:ext cx="'+Math.round(w)+'" cy="'+Math.round(h)+'"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="'+rid+'"/></a:graphicData></a:graphic></p:graphicFrame>');
+          }
+          T(MARGIN, 150000, SLIDE_W-2*MARGIN, 520000, title, 2600, true, "222222", "ctr");
+          var sLabelW = 950000, sColGap = 260000;
+          var sContentX = MARGIN + sLabelW, sContentW = SLIDE_W - MARGIN - sContentX;
+          var sHalfW = (sContentW - sColGap)/2, sLightX = sContentX, sDarkX = sContentX + sHalfW + sColGap;
+          if (sel.light) T(sLightX, 720000, sHalfW, 300000, "LIGHT", 1300, true, "888888", "ctr");
+          if (sel.dark)  T(sDarkX, 720000, sHalfW, 300000, "DARK", 1300, true, "888888", "ctr");
+          var sRowsTop = 1120000, sRowsBottom = SLIDE_H - 220000, sAvailH = sRowsBottom - sRowsTop, sRowPitch = sAvailH / grps.length;
+          var sCellY;
+          function cell(cx, A, dark) {
+            var pad = 50000, cy = sCellY + pad, ch = sRowPitch - pad*2;
+            var swColW = sHalfW*0.50, chGap = 90000, chX = cx + swColW + chGap, chColW = sHalfW - swColW - chGap;
+            var sub = ch/3, sH = Math.min(sub*0.66, swColW/9);
+            swRow(dark?A.NDC:A.NLC, cx, cy+(sub-sH)/2, swColW, sH, dark);
+            swRow(dark?A.NDS:A.NLS, cx, cy+sub+(sub-sH)/2, swColW, sH, dark);
+            var sd = (dark?A.NDSEM:A.NLSEM).concat(dark?A.NDDEEM:A.NLDEEM);
+            swRow(sd, cx, cy+2*sub+(sub-sH)/2, swColW, sH, dark);
+            var barW = chColW*0.52, dnW = chColW*0.46, cgap = chColW*0.02, ser = dark?A.NDS:A.NLS;
+            addChart(dark?7:1, ser, chX, cy, barW, ch);
+            addChart(dark?8:2, ser, chX+barW+cgap, cy, dnW, ch);
+          }
+          for (var sr = 0; sr < grps.length; sr++) {
+            sCellY = sRowsTop + sr*sRowPitch;
+            T(MARGIN, sCellY, sLabelW-60000, sRowPitch, grps[sr].label, 1500, true, "333333", "ctr");
+            if (sel.light) cell(sLightX, grps[sr].A, false);
+            if (sel.dark)  cell(sDarkX, grps[sr].A, true);
+          }
+          var sumXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' + sumShapes.join("") + sumGF.join("") + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
+          var sumRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sumRels.join("") + '</Relationships>';
+          var ssn = slideCounter++;
+          zip.file("ppt/slides/slide"+ssn+".xml", sumXml);
+          zip.file("ppt/slides/_rels/slide"+ssn+".xml.rels", sumRelsXml);
+          ctOverrides.push('<Override PartName="/ppt/slides/slide'+ssn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>');
+          var srid = "rId" + (ridCounter++);
+          newSlideRels.push('<Relationship Id="'+srid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide'+ssn+'.xml"/>');
+          sldIds.push('<p:sldId id="'+(sldIdCounter++)+'" r:id="'+srid+'"/>');
         }
 
-        /* ── Rich all-options summary: each cell = both swatch rows + semantic/
-           deemphasis row + real bar & donut charts, Light left / Dark right ── */
-        var sumShapes = [], sumGF = [], sid = 300, sumRid = 2;
-        var sumRels = ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout32.xml"/>'];
-        function S(x,y,w,h,fill,stroke,sw) { sumShapes.push(rectSp(sid++, x, y, w, h, fill, stroke, sw)); }
-        function T(x,y,w,h,t,sz,b,color,anchor) { sumShapes.push(textSp(sid++, x, y, w, h, t, sz, b, color, anchor)); }
-        function swRow(colors, x, y, w, h, dark) { var n = colors.length, g = 16000, sw = (w - g*(n-1))/n; for (var i = 0; i < n; i++) S(x+i*(sw+g), y, sw, h, colors[i], dark?NDARK:"FFFFFF", 12700); }
-        function addChart(srcCn, seriesArr, x, y, w, h) {
-          var newCn = chartCounter++;
-          zip.file("ppt/charts/chart"+newCn+".xml", processChart(srcChart[srcCn], seriesArr));
-          var emm3 = srcChartRels[srcCn].match(/embeddings\/([^"]+)/), cr3 = srcChartRels[srcCn];
-          if (emm3 && srcEmbData[emm3[1]]) { var ne3 = "dvp_" + newCn + ".xlsx"; zip.file("ppt/embeddings/" + ne3, srcEmbData[emm3[1]]); cr3 = cr3.replace(/embeddings\/[^"]+/, "embeddings/" + ne3); }
-          zip.file("ppt/charts/_rels/chart"+newCn+".xml.rels", cr3);
-          ctOverrides.push('<Override PartName="/ppt/charts/chart'+newCn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>');
-          var rid = "rId" + (sumRid++);
-          sumRels.push('<Relationship Id="'+rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart'+newCn+'.xml"/>');
-          sumGF.push('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="'+(sid++)+'" name="c'+newCn+'"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="'+Math.round(x)+'" y="'+Math.round(y)+'"/><a:ext cx="'+Math.round(w)+'" cy="'+Math.round(h)+'"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="'+rid+'"/></a:graphicData></a:graphic></p:graphicFrame>');
+        /* Categorical options + their summary, then Tonal options + their summary */
+        var catGroups = [], toneGroups = [];
+        for (var ci = 0; ci < chosen.length; ci++) {
+          var oi = chosen[ci];
+          if (oi <= 1) { if (sel.light) cloneOptionSlide(oi, false); if (sel.dark) cloneOptionSlide(oi, true); catGroups.push({label: OPT_LABELS[oi], A: arraysFor(opts[oi])}); }
         }
-        T(MARGIN, 120000, SLIDE_W-2*MARGIN, 440000, brandName + " — Palette Options", 2200, true, "222222", "ctr");
-        var sLabelW = 900000, sColGap = 220000;
-        var sContentX = MARGIN + sLabelW, sContentW = SLIDE_W - MARGIN - sContentX;
-        var sHalfW = (sContentW - sColGap)/2, sLightX = sContentX, sDarkX = sContentX + sHalfW + sColGap;
-        if (sel.light) T(sLightX, 560000, sHalfW, 240000, "LIGHT", 1000, true, "888888", "ctr");
-        if (sel.dark)  T(sDarkX, 560000, sHalfW, 240000, "DARK", 1000, true, "888888", "ctr");
-        var sRowsTop = 900000, sRowsBottom = SLIDE_H - 160000, sAvailH = sRowsBottom - sRowsTop, sRowPitch = sAvailH / summaryGroups.length;
-        var sCellY;
-        function cell(cx, A, dark) {
-          var pad = 34000, cy = sCellY + pad, ch = sRowPitch - pad*2;
-          var swColW = sHalfW*0.50, chGap = 70000, chX = cx + swColW + chGap, chColW = sHalfW - swColW - chGap;
-          var sub = ch/3, sH = Math.min(sub*0.74, swColW/9);
-          swRow(dark?A.NDC:A.NLC, cx, cy+(sub-sH)/2, swColW, sH, dark);
-          swRow(dark?A.NDS:A.NLS, cx, cy+sub+(sub-sH)/2, swColW, sH, dark);
-          var sd = (dark?A.NDSEM:A.NLSEM).concat(dark?A.NDDEEM:A.NLDEEM);
-          swRow(sd, cx, cy+2*sub+(sub-sH)/2, swColW, sH, dark);
-          var barW = chColW*0.52, dnW = chColW*0.46, cgap = chColW*0.02, ser = dark?A.NDS:A.NLS;
-          addChart(dark?7:1, ser, chX, cy, barW, ch);
-          addChart(dark?8:2, ser, chX+barW+cgap, cy, dnW, ch);
+        buildSummary(catGroups, brandName + " — Categorical Palettes");
+        for (var cj = 0; cj < chosen.length; cj++) {
+          var oj = chosen[cj];
+          if (oj >= 2) { if (sel.light) cloneOptionSlide(oj, false); if (sel.dark) cloneOptionSlide(oj, true); toneGroups.push({label: OPT_LABELS[oj], A: arraysFor(opts[oj])}); }
         }
-        for (var sr = 0; sr < summaryGroups.length; sr++) {
-          sCellY = sRowsTop + sr*sRowPitch;
-          T(MARGIN, sCellY, sLabelW-60000, sRowPitch, summaryGroups[sr].label, 1300, true, "333333", "ctr");
-          if (sel.light) cell(sLightX, summaryGroups[sr].A, false);
-          if (sel.dark)  cell(sDarkX, summaryGroups[sr].A, true);
-        }
-        var sumXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' + sumShapes.join("") + sumGF.join("") + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
-        var sumRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sumRels.join("") + '</Relationships>';
-        var ssn = slideCounter++;
-        zip.file("ppt/slides/slide"+ssn+".xml", sumXml);
-        zip.file("ppt/slides/_rels/slide"+ssn+".xml.rels", sumRelsXml);
-        ctOverrides.push('<Override PartName="/ppt/slides/slide'+ssn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>');
-        var srid = "rId" + (ridCounter++);
-        newSlideRels.push('<Relationship Id="'+srid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide'+ssn+'.xml"/>');
-        sldIds.push('<p:sldId id="'+(sldIdCounter++)+'" r:id="'+srid+'"/>');
+        buildSummary(toneGroups, brandName + " — Tonal Palettes");
 
         /* Drop original (corrupted) slides/charts/notes — clones replace them */
         var dropParts = [];
