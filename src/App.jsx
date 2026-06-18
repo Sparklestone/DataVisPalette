@@ -1288,7 +1288,7 @@ export default function App() {
         /* Build one spacious summary slide for a set of option groups (Light left,
            Dark right; each cell = Categorical + Spectrum rows + Semantic/Deemphasis
            row + real bar & donut charts). */
-        function buildSummary(grps, title) {
+        function buildSummary(grps, title, isTonal) {
           if (!grps.length) return;
           var sumShapes = [], sumGF = [], sid = 300, sumRid = 2;
           var sumRels = ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout32.xml"/>'];
@@ -1317,12 +1317,13 @@ export default function App() {
           function cell(cx, A, dark) {
             var pad = 50000, cy = sCellY + pad, ch = sRowPitch - pad*2;
             var swColW = sHalfW*0.50, chGap = 90000, chX = cx + swColW + chGap, chColW = sHalfW - swColW - chGap;
-            var sub = ch/3, sH = Math.min(sub*0.66, swColW/9);
-            swRow(dark?A.NDC:A.NLC, cx, cy+(sub-sH)/2, swColW, sH, dark);
-            swRow(dark?A.NDS:A.NLS, cx, cy+sub+(sub-sH)/2, swColW, sH, dark);
             var sd = (dark?A.NDSEM:A.NLSEM).concat(dark?A.NDDEEM:A.NLDEEM);
-            swRow(sd, cx, cy+2*sub+(sub-sH)/2, swColW, sH, dark);
-            var barW = chColW*0.52, dnW = chColW*0.46, cgap = chColW*0.02, ser = dark?A.NDS:A.NLS;
+            /* Tonal: spectrum row only. Categorical: categorical + spectrum rows. */
+            var rows = isTonal ? [dark?A.NDS:A.NLS, sd] : [dark?A.NDC:A.NLC, dark?A.NDS:A.NLS, sd];
+            var nr = rows.length, sub = ch/nr;
+            for (var ri = 0; ri < nr; ri++) { var sH = Math.min(sub*0.66, swColW/9); swRow(rows[ri], cx, cy+ri*sub+(sub-sH)/2, swColW, sH, dark); }
+            /* Chart series: categorical order for categorical, tonal order for tonal */
+            var barW = chColW*0.52, dnW = chColW*0.46, cgap = chColW*0.02, ser = isTonal ? (dark?A.NDS:A.NLS) : (dark?A.NDC:A.NLC);
             addChart(dark?7:1, ser, chX, cy, barW, ch);
             addChart(dark?8:2, ser, chX+barW+cgap, cy, dnW, ch);
           }
@@ -1349,12 +1350,12 @@ export default function App() {
           var oi = chosen[ci];
           if (oi <= 1) { if (sel.light) cloneOptionSlide(oi, false); if (sel.dark) cloneOptionSlide(oi, true); catGroups.push({label: OPT_LABELS[oi], A: arraysFor(opts[oi])}); }
         }
-        buildSummary(catGroups, brandName + " — Categorical Palettes");
+        buildSummary(catGroups, brandName + " — Categorical Palettes", false);
         for (var cj = 0; cj < chosen.length; cj++) {
           var oj = chosen[cj];
           if (oj >= 2) { if (sel.light) cloneOptionSlide(oj, false); if (sel.dark) cloneOptionSlide(oj, true); toneGroups.push({label: OPT_LABELS[oj], A: arraysFor(opts[oj])}); }
         }
-        buildSummary(toneGroups, brandName + " — Tonal Palettes");
+        buildSummary(toneGroups, brandName + " — Tonal Palettes", true);
 
         /* Drop original (corrupted) slides/charts/notes — clones replace them */
         var dropParts = [];
