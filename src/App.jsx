@@ -1077,7 +1077,10 @@ export default function App() {
     /* Recolor one L/D slide via positional text-label + fill replacement */
     function processSlide(xml, slideMap, optionLabel) {
       xml = repairXml(xml);
-      var STRUCT = {"222222":1,"FFFFFF":1,"D3D3D3":1,"888888":1};
+      /* Structural fills to leave alone. 000064/000063 are the template's dark-
+         stroke borders + dark background — keep them so the global replace below
+         turns them into the real dark-stroke color instead of a swatch color. */
+      var STRUCT = {"222222":1,"FFFFFF":1,"D3D3D3":1,"888888":1,"000064":1,"000063":1};
       var textEntries = [];
       var textRe = /#([A-F0-9]{6})(?=[^A-F0-9])/g;
       var m, idx = 0;
@@ -1158,8 +1161,8 @@ export default function App() {
         var row = rows[ri], rowY = rowsTop + ri*rowPitch, swatchY = rowY + (rowPitch - swH)/2;
         shapes.push(textSp(id++, MARGIN, rowY, labelW-120000, rowPitch, row.label, 1300, true, "333333", "ctr"));
         for (var i = 0; i < row.colors.length; i++) {
-          var x = swX + i*(swW+gap), stroke = row.mode === "D" ? NDARK : "DDDDDD";
-          shapes.push(rectSp(id++, x, swatchY, swW, swH, row.colors[i], stroke, 9525));
+          var x = swX + i*(swW+gap), stroke = row.mode === "D" ? NDARK : "FFFFFF";
+          shapes.push(rectSp(id++, x, swatchY, swW, swH, row.colors[i], stroke, 28575));
         }
       }
       return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' + shapes.join("") + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
