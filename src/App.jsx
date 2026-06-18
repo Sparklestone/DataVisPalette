@@ -961,6 +961,7 @@ export default function App() {
   var compare=_compare[0],setCompare=_compare[1],brandDD=_brandDD[0],setBrandDD=_brandDD[1];
   var reworkSeed=_reworkSeed[0],setReworkSeed=_reworkSeed[1];
   var pptModal=_pptModal[0],setPptModal=_pptModal[1];
+  var _pptExport=useState(null);var pptExport=_pptExport[0],setPptExport=_pptExport[1];
   var undoStack=_undoStack[0],setUndoStack=_undoStack[1];
   var paletteSize=_paletteSize[0],setPaletteSize=_paletteSize[1];
   var toneBases=_toneBases[0],setToneBases=_toneBases[1];
@@ -1030,168 +1031,218 @@ export default function App() {
     setPptModal(null);
   }
 
-  function downloadPptx() {
-    if (!cur) return;
+  function downloadPptx(sel) {
+    if (!opts || !opts.length) return;
+    var chosen = [];
+    for (var co = 0; co < 4; co++) { if (sel.opts[co] && opts[co]) chosen.push(co); }
+    if (!chosen.length) { show("Pick at least one option"); return; }
+    if (!sel.light && !sel.dark) { show("Pick Light and/or Dark"); return; }
+    setPptExport(null);
     show("Generating PPTX...");
+
     var brandName = activeBrand ? brands[activeBrand].name : "Generic";
+    var NDARK = darkStroke.replace("#","").toUpperCase();
     var hx = function(hex) { return hex.replace("#","").toUpperCase(); };
+    var OPT_LABELS = ["Cat 1","Cat 2","Tone 1","Tone 2"];
+    var palSize = (opts[chosen[0]].categorical || []).length || 9;
 
-    var NLC = cur.categorical.map(function(s){return hx(s.lightHex);});
-    var NDC = cur.categorical.map(function(s){return hx(s.darkHex);});
-    var NLS = cur.spectrum.map(function(s){return hx(s.lightHex);});
-    var NDS = cur.spectrum.map(function(s){return hx(s.darkHex);});
-    var NLSEM = cur.semantic.map(function(s){return hx(s.lightHex);});
-    var NDSEM = cur.semantic.map(function(s){return hx(s.darkHex);});
-    var NLDEEM = cur.deemphasis.map(function(s){return hx(s.lightHex);});
-    var NDDEEM = cur.deemphasis.map(function(s){return hx(s.darkHex);});
-    var NDARK = hx(darkStroke);
-
-    /* Per-slide positional replacement sequences (structure from template analysis):
-       S1 (L slide): L cat 9, L spec 9, L deem 3, L sem 3, L deem 3, L sem 3 = 30
-       S2 (D slide): D cat 9, D spec 9, D deem 3, D sem 3, D deem 3, D sem 3 = 30
-       S3 (compare): L deem 3, L sem 3, D deem 3, D sem 3,
-                     D cat 9, D spec 9, L cat 9, L spec 9,
-                     D deem 3, D sem 3, L deem 3, L sem 3 = 60 */
-    var S1 = [].concat(NLC, NLS, NLDEEM, NLSEM, NLDEEM, NLSEM);
-    var S2 = [].concat(NDC, NDS, NDDEEM, NDSEM, NDDEEM, NDSEM);
-    var S3 = [].concat(NLDEEM, NLSEM, NDDEEM, NDSEM, NDC, NDS, NLC, NLS, NDDEEM, NDSEM, NLDEEM, NLSEM);
-
-    /* Repair corrupted 7-char hex values from previous code bug */
-    function repairXml(xml) {
-      return xml.replace(/val="([A-F0-9]{7})\//g, function(match, hex7) {
-        return 'val="' + hex7.substring(1) + '"/';
-      });
+    function arraysFor(pal) {
+      return {
+        NLC: pal.categorical.map(function(s){return hx(s.lightHex);}),
+        NDC: pal.categorical.map(function(s){return hx(s.darkHex);}),
+        NLS: pal.spectrum.map(function(s){return hx(s.lightHex);}),
+        NDS: pal.spectrum.map(function(s){return hx(s.darkHex);}),
+        NLSEM: pal.semantic.map(function(s){return hx(s.lightHex);}),
+        NDSEM: pal.semantic.map(function(s){return hx(s.darkHex);}),
+        NLDEEM: pal.deemphasis.map(function(s){return hx(s.lightHex);}),
+        NDDEEM: pal.deemphasis.map(function(s){return hx(s.darkHex);})
+      };
     }
 
+    /* Repair corrupted 7-char hex values baked into the template */
+    function repairXml(xml) {
+      return xml.replace(/val="([A-F0-9]{7})\//g, function(match, hex7) { return 'val="' + hex7.substring(1) + '"/'; });
+    }
 
-    function processSlide(xml, slideMap) {
+    /* Recolor one L/D slide via positional text-label + fill replacement */
+    function processSlide(xml, slideMap, optionLabel) {
       xml = repairXml(xml);
       var STRUCT = {"222222":1,"FFFFFF":1,"D3D3D3":1,"888888":1};
-
-      /* 1. Find all text labels positionally and build replacement map */
       var textEntries = [];
       var textRe = /#([A-F0-9]{6})(?=[^A-F0-9])/g;
       var m, idx = 0;
       while ((m = textRe.exec(xml)) !== null && idx < slideMap.length) {
-        textEntries.push({pos: m.index + 1, len: 6, oldHex: m[1], newHex: slideMap[idx]});
+        textEntries.push({pos: m.index + 1, len: 6, newHex: slideMap[idx]});
         idx++;
       }
-
-      /* 2. Find ALL non-structural fills and pair each with its NEXT text label.
-         In the template, each swatch shape has: fill (~1080 chars before) → text label.
-         Brand strip fills have no nearby text label (>2000 chars away). */
       var fillEntries = [];
       var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
       var fm;
       while ((fm = fillRe.exec(xml)) !== null) {
         if (STRUCT[fm[1]]) continue;
-        /* Find next text label after this fill */
         var nextText = null;
         for (var t = 0; t < textEntries.length; t++) {
           if (textEntries[t].pos > fm.index) { nextText = textEntries[t]; break; }
         }
         if (nextText && (nextText.pos - fm.index) < 1500) {
-          fillEntries.push({pos: fm.index + 13, len: 6, newHex: nextText.newHex});
+          fillEntries.push({pos: fm.index + 13, len: 6, val: nextText.newHex});
         }
       }
-
-      /* 3. Apply all replacements end-to-start */
       var allR = [];
       for (var ti = 0; ti < textEntries.length; ti++) allR.push({pos:textEntries[ti].pos, len:6, val:textEntries[ti].newHex});
-      for (var fi2 = 0; fi2 < fillEntries.length; fi2++) allR.push({pos:fillEntries[fi2].pos, len:6, val:fillEntries[fi2].newHex});
+      for (var fi2 = 0; fi2 < fillEntries.length; fi2++) allR.push({pos:fillEntries[fi2].pos, len:6, val:fillEntries[fi2].val});
       allR.sort(function(a, b) { return b.pos - a.pos; });
       for (var r = 0; r < allR.length; r++) {
         var rp = allR[r];
         xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + rp.len);
       }
-      /* Dark bg + brand name */
       xml = xml.split('val="000064"').join('val="' + NDARK + '"');
       xml = xml.split('val="000063"').join('val="' + NDARK + '"');
       xml = xml.split("HAP").join(brandName);
-      xml = xml.split("Option 1").join("Option " + (activeOpt + 1));
+      xml = xml.split("Option 1").join(optionLabel);
       return xml;
     }
 
-    function processChart(xml) {
+    /* Recolor one chart. seriesArr = spectrum hexes for that option/mode */
+    function processChart(xml, seriesArr) {
       xml = repairXml(xml);
-      /* Positional replacement: charts have exactly 9 data series fills.
-         L charts: 9-10 fills = [s1,s2,s3,s4,s5,s6,s7,s8,s9,(gray)]
-         D charts: 20 fills = alternating fill+stroke pairs for 9 series + extras
-         D pattern A (fill-first): [s1f,s1s,s2f,s2s,...,s9f,s9s,extra,extra]
-         D pattern B (stroke-first): [s1s,s1f,s2s,s2f,...,s9s,s9f,extra,extra] */
       var fills = [];
       var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
       var fm;
-      while ((fm = fillRe.exec(xml)) !== null) {
-        fills.push({pos: fm.index + 13, hex: fm[1]});
-      }
+      while ((fm = fillRe.exec(xml)) !== null) { fills.push({pos: fm.index + 13, hex: fm[1]}); }
       var isD = fills.length >= 18;
-      var replacements = [];
+      var reps = [];
       if (!isD) {
-        /* L chart: first 9 fills are series 1-9, map to NLS[0-8] */
-        for (var li = 0; li < Math.min(9, fills.length); li++) {
-          replacements.push({pos: fills[li].pos, val: NLS[li]});
-        }
+        for (var li = 0; li < Math.min(9, fills.length); li++) reps.push({pos: fills[li].pos, val: seriesArr[li]});
       } else {
-        /* D chart: detect pattern by first fill */
         var strokeFirst = fills[0].hex === "000064" || fills[0].hex === NDARK;
         for (var di = 0; di < 18 && di < fills.length; di++) {
-          var seriesIdx = Math.floor(di / 2);
+          var si = Math.floor(di / 2);
           var isFill = strokeFirst ? (di % 2 === 1) : (di % 2 === 0);
-          replacements.push({pos: fills[di].pos, val: isFill ? NDS[seriesIdx] : NDARK});
+          reps.push({pos: fills[di].pos, val: isFill ? seriesArr[si] : NDARK});
         }
-        /* Remaining fills (18+) → NDARK or keep */
-        for (var ei = 18; ei < fills.length; ei++) {
-          if (fills[ei].hex === "000064") {
-            replacements.push({pos: fills[ei].pos, val: NDARK});
-          }
-        }
+        for (var ei = 18; ei < fills.length; ei++) { if (fills[ei].hex === "000064") reps.push({pos: fills[ei].pos, val: NDARK}); }
       }
-      /* Apply end-to-start */
-      replacements.sort(function(a, b) { return b.pos - a.pos; });
-      for (var r = 0; r < replacements.length; r++) {
-        var rp = replacements[r];
-        xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + 6);
-      }
+      reps.sort(function(a, b) { return b.pos - a.pos; });
+      for (var k = 0; k < reps.length; k++) { var rp2 = reps[k]; xml = xml.substring(0, rp2.pos) + rp2.val + xml.substring(rp2.pos + 6); }
       return xml;
     }
 
-    function processOther(xml) {
-      xml = repairXml(xml);
-      xml = xml.split('val="000064"').join('val="' + NDARK + '"');
-      xml = xml.split('val="000063"').join('val="' + NDARK + '"');
-      xml = xml.split("HAP").join(brandName);
-      return xml;
+    /* ── All-options summary slide (built from scratch) ── */
+    var SLIDE_W = 14630400, SLIDE_H = 8229600, MARGIN = 685800;
+    function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function rectSp(id,x,y,w,h,fill,stroke,sw) {
+      return '<p:sp><p:nvSpPr><p:cNvPr id="'+id+'" name="r'+id+'"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="'+Math.round(x)+'" y="'+Math.round(y)+'"/><a:ext cx="'+Math.round(w)+'" cy="'+Math.round(h)+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="'+fill+'"/></a:solidFill><a:ln w="'+sw+'"><a:solidFill><a:srgbClr val="'+stroke+'"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>';
     }
+    function textSp(id,x,y,w,h,t,sz,b,color,anchor) {
+      return '<p:sp><p:nvSpPr><p:cNvPr id="'+id+'" name="t'+id+'"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="'+Math.round(x)+'" y="'+Math.round(y)+'"/><a:ext cx="'+Math.round(w)+'" cy="'+Math.round(h)+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" anchor="'+(anchor||"ctr")+'"/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="'+sz+'" b="'+(b?1:0)+'" dirty="0"><a:solidFill><a:srgbClr val="'+color+'"/></a:solidFill><a:latin typeface="+mn-lt"/></a:rPr><a:t>'+esc(t)+'</a:t></a:r></a:p></p:txBody></p:sp>';
+    }
+    function summarySlide(rows, nSw) {
+      var id = 100, shapes = [];
+      shapes.push(textSp(id++, MARGIN, 260000, SLIDE_W-2*MARGIN, 620000, brandName + " — Palette Options", 2400, true, "222222", "ctr"));
+      var rowsTop = 1150000, rowsBottom = SLIDE_H - 420000, availH = rowsBottom - rowsTop;
+      var rowPitch = availH / Math.max(1, rows.length);
+      var labelW = 2300000, swX = MARGIN + labelW, swAreaW = SLIDE_W - MARGIN - swX;
+      var gap = 60000, swW = (swAreaW - gap*(nSw-1)) / nSw, swH = Math.min(rowPitch*0.55, 760000);
+      for (var ri = 0; ri < rows.length; ri++) {
+        var row = rows[ri], rowY = rowsTop + ri*rowPitch, swatchY = rowY + (rowPitch - swH)/2;
+        shapes.push(textSp(id++, MARGIN, rowY, labelW-120000, rowPitch, row.label, 1300, true, "333333", "ctr"));
+        for (var i = 0; i < row.colors.length; i++) {
+          var x = swX + i*(swW+gap), stroke = row.mode === "D" ? NDARK : "DDDDDD";
+          shapes.push(rectSp(id++, x, swatchY, swW, swH, row.colors[i], stroke, 9525));
+        }
+      }
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' + shapes.join("") + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
+    }
+    var SUMMARY_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout32.xml"/></Relationships>';
 
     fetch("/template.pptx").then(function(res) {
       return res.arrayBuffer();
     }).then(function(buf) {
       return JSZip.loadAsync(buf);
     }).then(function(zip) {
-      var xmlFiles = [];
-      zip.forEach(function(path, entry) {
-        if (!entry.dir && (path.endsWith(".xml") || path.endsWith(".rels"))) xmlFiles.push(path);
+      var paths = ["ppt/slides/slide1.xml","ppt/slides/slide2.xml","ppt/slides/_rels/slide1.xml.rels","ppt/slides/_rels/slide2.xml.rels","[Content_Types].xml","ppt/presentation.xml","ppt/_rels/presentation.xml.rels"];
+      for (var c = 1; c <= 8; c++) { paths.push("ppt/charts/chart"+c+".xml"); paths.push("ppt/charts/_rels/chart"+c+".xml.rels"); }
+      return Promise.all(paths.map(function(p) { return zip.file(p).async("string").then(function(str){ return {p:p, s:str}; }); })).then(function(list) {
+        var src = {};
+        for (var i = 0; i < list.length; i++) src[list[i].p] = list[i].s;
+        var srcSlide = {1: src["ppt/slides/slide1.xml"], 2: src["ppt/slides/slide2.xml"]};
+        var srcSlideRels = {1: src["ppt/slides/_rels/slide1.xml.rels"], 2: src["ppt/slides/_rels/slide2.xml.rels"]};
+        var srcChart = {}, srcChartRels = {};
+        for (var n = 1; n <= 8; n++) { srcChart[n] = src["ppt/charts/chart"+n+".xml"]; srcChartRels[n] = src["ppt/charts/_rels/chart"+n+".xml.rels"]; }
+        var ct = src["[Content_Types].xml"], presRels = src["ppt/_rels/presentation.xml.rels"], pres = src["ppt/presentation.xml"];
+
+        var chartCounter = 100, slideCounter = 100, ridCounter = 1001, sldIdCounter = 300;
+        var newSlideRels = [], sldIds = [], ctOverrides = [];
+
+        function cloneOptionSlide(optIdx, isDark) {
+          var A = arraysFor(opts[optIdx]);
+          var slideMap = isDark ? [].concat(A.NDC,A.NDS,A.NDDEEM,A.NDSEM,A.NDDEEM,A.NDSEM) : [].concat(A.NLC,A.NLS,A.NLDEEM,A.NLSEM,A.NLDEEM,A.NLSEM);
+          var seriesArr = isDark ? A.NDS : A.NLS;
+          var srcN = isDark ? 2 : 1;
+          var label = OPT_LABELS[optIdx] + (isDark ? " · Dark" : " · Light");
+          var slideXml = processSlide(srcSlide[srcN], slideMap, label);
+          var relsXml = srcSlideRels[srcN];
+          var matches = relsXml.match(/\/charts\/chart(\d+)\.xml/g) || [];
+          for (var mi = 0; mi < matches.length; mi++) {
+            var cn = parseInt(matches[mi].replace(/\D/g,""), 10);
+            var newCn = chartCounter++;
+            zip.file("ppt/charts/chart"+newCn+".xml", processChart(srcChart[cn], seriesArr));
+            zip.file("ppt/charts/_rels/chart"+newCn+".xml.rels", srcChartRels[cn]);
+            ctOverrides.push('<Override PartName="/ppt/charts/chart'+newCn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>');
+            relsXml = relsXml.split("/charts/chart"+cn+".xml").join("/charts/chart"+newCn+".xml");
+          }
+          var sn = slideCounter++;
+          zip.file("ppt/slides/slide"+sn+".xml", slideXml);
+          zip.file("ppt/slides/_rels/slide"+sn+".xml.rels", relsXml);
+          ctOverrides.push('<Override PartName="/ppt/slides/slide'+sn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>');
+          var rid = "rId" + (ridCounter++);
+          newSlideRels.push('<Relationship Id="'+rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide'+sn+'.xml"/>');
+          sldIds.push('<p:sldId id="'+(sldIdCounter++)+'" r:id="'+rid+'"/>');
+        }
+
+        var summaryRows = [];
+        for (var ci = 0; ci < chosen.length; ci++) {
+          var oi = chosen[ci], A2 = arraysFor(opts[oi]);
+          if (sel.light) { cloneOptionSlide(oi, false); summaryRows.push({label: OPT_LABELS[oi]+" · Light", mode:"L", colors: A2.NLC}); }
+          if (sel.dark)  { cloneOptionSlide(oi, true);  summaryRows.push({label: OPT_LABELS[oi]+" · Dark",  mode:"D", colors: A2.NDC}); }
+        }
+        var ssn = slideCounter++;
+        zip.file("ppt/slides/slide"+ssn+".xml", summarySlide(summaryRows, palSize));
+        zip.file("ppt/slides/_rels/slide"+ssn+".xml.rels", SUMMARY_RELS);
+        ctOverrides.push('<Override PartName="/ppt/slides/slide'+ssn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>');
+        var srid = "rId" + (ridCounter++);
+        newSlideRels.push('<Relationship Id="'+srid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide'+ssn+'.xml"/>');
+        sldIds.push('<p:sldId id="'+(sldIdCounter++)+'" r:id="'+srid+'"/>');
+
+        /* Drop original (corrupted) slides/charts/notes — clones replace them */
+        var dropParts = [];
+        for (var d1 = 1; d1 <= 3; d1++) { dropParts.push("ppt/slides/slide"+d1+".xml","ppt/slides/_rels/slide"+d1+".xml.rels"); }
+        for (var d2 = 1; d2 <= 16; d2++) { dropParts.push("ppt/charts/chart"+d2+".xml","ppt/charts/_rels/chart"+d2+".xml.rels"); }
+        zip.forEach(function(p) { if (p.indexOf("ppt/notesSlides/") === 0) dropParts.push(p); });
+        for (var dp = 0; dp < dropParts.length; dp++) { if (zip.file(dropParts[dp])) zip.remove(dropParts[dp]); }
+        function dropOverride(part) { ct = ct.replace(new RegExp('<Override PartName="/'+part.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+'"[^>]*/>'), ""); }
+        for (var o1 = 1; o1 <= 3; o1++) dropOverride("ppt/slides/slide"+o1+".xml");
+        for (var o2 = 1; o2 <= 16; o2++) dropOverride("ppt/charts/chart"+o2+".xml");
+        ct = ct.replace(/<Override PartName="\/ppt\/notesSlides\/[^"]*"[^>]*\/>/g, "");
+        presRels = presRels.replace(/<Relationship[^>]*Target="slides\/slide[123]\.xml"[^>]*\/>/g, "");
+
+        ct = ct.replace("</Types>", ctOverrides.join("") + "</Types>");
+        presRels = presRels.replace("</Relationships>", newSlideRels.join("") + "</Relationships>");
+        pres = pres.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, "<p:sldIdLst>" + sldIds.join("") + "</p:sldIdLst>");
+
+        zip.file("[Content_Types].xml", ct);
+        zip.file("ppt/_rels/presentation.xml.rels", presRels);
+        zip.file("ppt/presentation.xml", pres);
+        return zip;
       });
-      var promises = xmlFiles.map(function(path) {
-        return zip.file(path).async("string").then(function(content) {
-          var updated;
-          if (path === "ppt/slides/slide1.xml") { updated = processSlide(content, S1); }
-          else if (path === "ppt/slides/slide2.xml") { updated = processSlide(content, S2); }
-          else if (path === "ppt/slides/slide3.xml") { updated = processSlide(content, S3); }
-          else if (path.indexOf("ppt/charts/chart") >= 0) { updated = processChart(content); }
-          else { updated = processOther(content); }
-          zip.file(path, updated);
-        });
-      });
-      return Promise.all(promises).then(function() { return zip; });
     }).then(function(zip) {
       return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
     }).then(function(blob) {
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
       a.href = url;
-      a.download = brandName + "_DataVisPalette_Opt" + (activeOpt + 1) + ".pptx";
+      a.download = brandName + "_DataVisPalette.pptx";
       a.click();
       URL.revokeObjectURL(url);
       show("PPTX downloaded!");
@@ -1505,7 +1556,7 @@ export default function App() {
         <div style={{display:"flex",gap:2,backgroundColor:"#fff",borderRadius:6,padding:2,border:"1px solid #eee"}}>{["Cat 1","Cat 2","Tone 1","Tone 2"].map(function(lbl,i){return (<button key={i} onClick={function(){setActiveOpt(i);}} style={{padding:"5px 12px",borderRadius:4,border:"none",backgroundColor:activeOpt===i?"#333":"transparent",color:activeOpt===i?"#fff":"#888",fontWeight:activeOpt===i?700:400,fontSize:13,cursor:"pointer"}}>{lbl}</button>);})}</div>
         <div style={{display:"flex",alignItems:"center",gap:4,backgroundColor:"#fff",borderRadius:6,padding:"2px 8px",border:"1px solid #eee"}}><span style={{fontSize:10,color:"#777",fontFamily:"'Space Mono',monospace",letterSpacing:"0.05em"}}>Colors</span><button onClick={function(){if(paletteSize>4){var ns=paletteSize-1;setPaletteSize(ns);regen(brandColors,darkStroke,reworkSeed,ns);}}} style={{width:22,height:22,border:"none",backgroundColor:"transparent",color:paletteSize>4?"#333":"#ccc",fontSize:16,fontWeight:700,cursor:paletteSize>4?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button><span style={{fontSize:14,fontWeight:700,fontFamily:"'Space Mono',monospace",color:"#333",minWidth:18,textAlign:"center"}}>{paletteSize}</span><button onClick={function(){if(paletteSize<12){var ns=paletteSize+1;setPaletteSize(ns);regen(brandColors,darkStroke,reworkSeed,ns);}}} style={{width:22,height:22,border:"none",backgroundColor:"transparent",color:paletteSize<12?"#333":"#ccc",fontSize:16,fontWeight:700,cursor:paletteSize<12?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button></div>
         <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework Colors</button>
-        <button onClick={downloadPptx} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
+        <button onClick={function(){setPptExport({opts:[true,true,true,true],light:true,dark:true});}} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
       </div>
       {/* Color-source selector (all tabs) */}
       {brandColors.length>0&&(function(){
@@ -1582,6 +1633,35 @@ export default function App() {
           <button onClick={function(){setPptModal(null);}} style={{marginTop:10,border:"none",backgroundColor:"transparent",color:"#777",fontSize:12,cursor:"pointer"}}>Cancel</button>
         </div>
       </div>)}
+
+      {/* PPTX Export Dialog */}
+      {pptExport&&(function(){
+        var OPT_LABELS=["Cat 1","Cat 2","Tone 1","Tone 2"];
+        function toggleOpt(i){var o=pptExport.opts.slice();o[i]=!o[i];setPptExport(Object.assign({},pptExport,{opts:o}));}
+        function setMode(key,val){var u={};u[key]=val;setPptExport(Object.assign({},pptExport,u));}
+        var nOpts=pptExport.opts.filter(Boolean).length;
+        var nModes=(pptExport.light?1:0)+(pptExport.dark?1:0);
+        var slideCount=nOpts*nModes+1;
+        var chip=function(on){return {padding:"7px 12px",borderRadius:8,border:on?"2px solid #ff8800":"1px solid #ddd",backgroundColor:on?"#fff5e6":"#fafafa",color:"#333",fontSize:13,fontWeight:on?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"'Outfit',sans-serif"};};
+        var box=function(on){return {width:16,height:16,borderRadius:4,border:on?"none":"1.5px solid #bbb",backgroundColor:on?"#ff8800":"#fff",color:"#fff",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"};};
+        return (<div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backgroundColor:"rgba(0,0,0,0.5)",backdropFilter:"blur(5px)"}} onClick={function(){setPptExport(null);}}>
+          <div style={{backgroundColor:"#fff",borderRadius:12,maxWidth:420,width:"100%",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
+            <h3 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:"0.03em",marginBottom:4}}>Export to PowerPoint</h3>
+            <p style={{fontSize:13,color:"#666",marginBottom:16,fontFamily:"'Outfit',sans-serif"}}>Each option gets its Light and/or Dark slides, plus a final all-options summary slide.</p>
+            <div style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#777",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:7}}>Options</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:18}}>{OPT_LABELS.map(function(lb,i){var on=pptExport.opts[i];return (<div key={i} onClick={function(){toggleOpt(i);}} style={chip(on)}><span style={box(on)}>{on?"✓":""}</span>{lb}</div>);})}</div>
+            <div style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#777",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:7}}>Slides</div>
+            <div style={{display:"flex",gap:7,marginBottom:18}}>
+              <div onClick={function(){setMode("light",!pptExport.light);}} style={chip(pptExport.light)}><span style={box(pptExport.light)}>{pptExport.light?"✓":""}</span>Light</div>
+              <div onClick={function(){setMode("dark",!pptExport.dark);}} style={chip(pptExport.dark)}><span style={box(pptExport.dark)}>{pptExport.dark?"✓":""}</span>Dark</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4}}>
+              <button onClick={function(){downloadPptx(pptExport);}} disabled={nOpts===0||nModes===0} style={{flex:1,padding:"11px 16px",borderRadius:8,border:"none",backgroundColor:(nOpts===0||nModes===0)?"#ccc":"#333",color:"#fff",fontWeight:700,fontSize:14,cursor:(nOpts===0||nModes===0)?"not-allowed":"pointer",fontFamily:"'Outfit',sans-serif"}}>Download {slideCount} slide{slideCount===1?"":"s"}</button>
+              <button onClick={function(){setPptExport(null);}} style={{padding:"11px 16px",borderRadius:8,border:"1px solid #ddd",backgroundColor:"#fff",color:"#666",fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        </div>);
+      })()}
 
       {selInfo&&<ColorDetail info={selInfo} onClose={function(){setSelInfo(null);}} onSetHSL={setSlotHSL} brandColors={brandColors} />}
     </div>
