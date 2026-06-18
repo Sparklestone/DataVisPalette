@@ -624,29 +624,39 @@ function generateTonedRange(brandColors, toneIdx, darkBg, reworkSeed, paletteSiz
 
   var dBgc = darkBg || "#121212";
 
-  /* Generate a tonal ramp per base, grouped in base order. */
-  /* Light and dark variants each spread evenly across their own AA-passing   */
-  /* window so adjacent tones stay distinct even when the stroke color sits   */
-  /* close to the base hue (e.g. navy stroke under blue tones).               */
+  /* Build a ramp of n lightness values ANCHORED at the base's own lightness   */
+  /* (clamped into the AA-passing window), then stepping toward the far end —   */
+  /* lighter by default, darker when reversed. So tone 1 reads as the original  */
+  /* color and the rest step away. Falls back to the roomier side if needed.    */
+  function rampFromAnchor(l0, lo, hi, n, rev) {
+    var anchor = Math.max(lo, Math.min(hi, l0));
+    if (n <= 1) return [anchor];
+    var far = rev ? lo : hi;
+    if (Math.abs(far - anchor) < (n - 1) * 5) far = rev ? hi : lo;
+    var arr = [];
+    for (var i = 0; i < n; i++) arr.push(anchor + (far - anchor) * (i / (n - 1)));
+    return arr;
+  }
+
+  /* Generate a tonal ramp per base, grouped in base order. Each base's first  */
+  /* swatch stays as close to its picked color as AA allows.                   */
   var allSlots = [];
   for (var ti = 0; ti < nb; ti++) {
     var base = bases[ti];
     var nTones = tonesPerBase + (ti < remainder ? 1 : 0);
     if (nTones < 1) nTones = 1;
     var sat = base.sat;
+    var l0 = base.l;
     var wR = passRange(base.hue, sat, "#ffffff") || [16, 70];
     var dR = passRange(base.hue, sat, dBgc) || [60, 92];
     /* Trim extremes (avoid near-black / near-white); relax if window is tiny */
-    var wLo = Math.max(wR[0], 16), wHi = Math.min(wR[1], 80); if (wHi - wLo < 12) { wLo = wR[0]; wHi = wR[1]; }
-    var dLo = Math.max(dR[0], 28), dHi = Math.min(dR[1], 92); if (dHi - dLo < 12) { dLo = dR[0]; dHi = dR[1]; }
+    var wLo = Math.max(wR[0], 14), wHi = Math.min(wR[1], 82); if (wHi - wLo < 12) { wLo = wR[0]; wHi = wR[1]; }
+    var dLo = Math.max(dR[0], 24), dHi = Math.min(dR[1], 92); if (dHi - dLo < 12) { dLo = dR[0]; dHi = dR[1]; }
+    var lightRamp = rampFromAnchor(l0, wLo, wHi, nTones, reverse);
+    var darkRamp = rampFromAnchor(l0, dLo, dHi, nTones, reverse);
     for (var vi = 0; vi < nTones; vi++) {
-      var t = nTones > 1 ? vi / (nTones - 1) : 0.5;
-      /* Direction: dark→light by default, reversed to light→dark on toggle */
-      var lf = reverse ? (1 - t) : t;
-      var lL = wLo + lf * (wHi - wLo);
-      var dL = dLo + lf * (dHi - dLo);
-      var lHex = adjustForContrast(hsl2hex(base.hue, sat, lL), "#ffffff", 4.5);
-      var dHex = adjustForContrast(hsl2hex(base.hue, sat, dL), dBgc, 4.5);
+      var lHex = adjustForContrast(hsl2hex(base.hue, sat, lightRamp[vi]), "#ffffff", 4.5);
+      var dHex = adjustForContrast(hsl2hex(base.hue, sat, darkRamp[vi]), dBgc, 4.5);
       var toneLabel = nTones === 1 ? base.name : base.name + " " + (vi + 1);
       allSlots.push({
         hue: base.hue, sat: sat, lightHex: lHex, darkHex: dHex,
