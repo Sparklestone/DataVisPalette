@@ -1095,6 +1095,27 @@ export default function App() {
          (e.g. a dark brand color) must still be recolored normally. */
       xml = xml.split('<a:ln><a:solidFill><a:srgbClr val="000064"/>').join('<a:ln><a:solidFill><a:srgbClr val="__DKSTK__"/>');
       xml = xml.split('<a:ln><a:solidFill><a:srgbClr val="000063"/>').join('<a:ln><a:solidFill><a:srgbClr val="__DKSTK__"/>');
+      /* Brand-strip swatches: small squares in the header band. Recolor them in
+         left-to-right (x) order with the brand's colors — matches the in-app
+         dark-stroke color picker order. */
+      var stripList = [], PRE = '<a:solidFill><a:srgbClr val="';
+      var spRe = /<p:sp>[\s\S]*?<\/p:sp>/g, sp;
+      while ((sp = spRe.exec(xml)) !== null) {
+        var block = sp[0];
+        var offM = block.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>/);
+        var extM = block.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
+        var fillM = block.match(/<a:solidFill><a:srgbClr val="[A-F0-9]{6}"\/><\/a:solidFill>/);
+        if (offM && extM && fillM) {
+          var yy = parseInt(offM[2],10), cxx = parseInt(extM[1],10), cyy = parseInt(extM[2],10);
+          if (yy > 500000 && yy < 580000 && cxx > 120000 && cxx < 320000 && cyy > 120000 && cyy < 320000) {
+            stripList.push({x: parseInt(offM[1],10), pos: sp.index + block.indexOf(fillM[0]) + PRE.length});
+          }
+        }
+      }
+      stripList.sort(function(a, b) { return a.x - b.x; });
+      var stripPos = {};
+      for (var sz = 0; sz < stripList.length; sz++) stripPos[stripList[sz].pos] = true;
+
       var STRUCT = {"222222":1,"FFFFFF":1,"D3D3D3":1,"888888":1};
       var textEntries = [];
       var textRe = /#([A-F0-9]{6})(?=[^A-F0-9])/g;
@@ -1103,10 +1124,11 @@ export default function App() {
         textEntries.push({pos: m.index + 1, newHex: slideMap[idx]});
         idx++;
       }
-      var fillEntries = [], stripFills = [];
+      var fillEntries = [];
       var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
       var fm;
       while ((fm = fillRe.exec(xml)) !== null) {
+        if (stripPos[fm.index + 13]) continue;
         if (STRUCT[fm[1]]) continue;
         var nextText = null;
         for (var t = 0; t < textEntries.length; t++) {
@@ -1114,17 +1136,14 @@ export default function App() {
         }
         if (nextText && (nextText.pos - fm.index) < 1500) {
           fillEntries.push({pos: fm.index + 13, val: nextText.newHex});
-        } else if (fm[1] !== "000064" && fm[1] !== "000063") {
-          /* Unpaired non-structural fill (not the dark bg) → brand-strip swatch */
-          stripFills.push({pos: fm.index + 13});
         }
       }
       var allR = [];
       for (var ti = 0; ti < textEntries.length; ti++) allR.push({pos:textEntries[ti].pos, val:textEntries[ti].newHex});
       for (var fi2 = 0; fi2 < fillEntries.length; fi2++) allR.push({pos:fillEntries[fi2].pos, val:fillEntries[fi2].val});
-      for (var bs = 0; bs < stripFills.length; bs++) {
+      for (var bs = 0; bs < stripList.length; bs++) {
         var bc = bs < brandColors.length ? brandColors[bs].hex.replace("#","").toUpperCase() : "FFFFFF";
-        allR.push({pos: stripFills[bs].pos, val: bc});
+        allR.push({pos: stripList[bs].pos, val: bc});
       }
       allR.sort(function(a, b) { return b.pos - a.pos; });
       for (var r = 0; r < allR.length; r++) {
@@ -1302,7 +1321,6 @@ export default function App() {
         var sCellY;
         function cell(cx, A, dark) {
           var pad = 34000, cy = sCellY + pad, ch = sRowPitch - pad*2;
-          if (dark) S(cx-10000, sCellY+12000, sHalfW+20000, sRowPitch-24000, NDARK, NDARK, 6350);
           var swColW = sHalfW*0.50, chGap = 70000, chX = cx + swColW + chGap, chColW = sHalfW - swColW - chGap;
           var sub = ch/3, sH = Math.min(sub*0.74, swColW/9);
           swRow(dark?A.NDC:A.NLC, cx, cy+(sub-sH)/2, swColW, sH, dark);
