@@ -216,13 +216,17 @@ function makeContrastOrder(n) {
   return order;
 }
 
-function generatePalettes(brandColors, optIdx, darkBg, reworkSeed, paletteSize, toneBases, toneReverse) {
+function generatePalettes(brandColors, optIdx, darkBg, reworkSeed, paletteSize, selBases, toneReverse) {
   var ps = paletteSize || 9;
   if (optIdx <= 1 && brandColors.length > 0) {
-    return generateBrandFirst(brandColors, optIdx, darkBg, reworkSeed, ps);
+    /* Cat 1/2: if the user picked a subset, draw only from those colors */
+    var pool = (selBases && selBases.length > 0) ? selBases : brandColors;
+    var pal = generateBrandFirst(pool, optIdx, darkBg, reworkSeed, ps);
+    pal.bases = (selBases || []).map(function(b){return {hex:b.hex, name:b.name, isBrand:b.isBrand !== false};});
+    return pal;
   }
   if (optIdx >= 2 && brandColors.length > 0) {
-    return generateTonedRange(brandColors, optIdx - 2, darkBg, reworkSeed, ps, toneBases, toneReverse);
+    return generateTonedRange(brandColors, optIdx - 2, darkBg, reworkSeed, ps, selBases, toneReverse);
   }
   return generateFresh(brandColors, optIdx, darkBg, reworkSeed, ps);
 }
@@ -946,7 +950,7 @@ export default function App() {
   var _uploadName=useState(""),_toast=useState(""),_loaded=useState(false);
   var _compare=useState(false),_brandDD=useState(false),_reworkSeed=useState(0),_pptModal=useState(null);
   var _undoStack=useState([]),_paletteSize=useState(9);
-  var _toneBases=useState({2:[],3:[]}),_toneReverse=useState({2:false,3:false}),_customHex=useState("#3366cc");
+  var _toneBases=useState({0:[],1:[],2:[],3:[]}),_toneReverse=useState({2:false,3:false}),_customHex=useState("#3366cc");
   var fileRef=useRef(null);
   var brands=_brands[0],setBrands=_brands[1],activeBrand=_actBrand[0],setActiveBrand=_actBrand[1];
   var brandColors=_brandColors[0],setBrandColors=_brandColors[1],opts=_opts[0],setOpts=_opts[1];
@@ -966,7 +970,7 @@ export default function App() {
   function undo(){setUndoStack(function(prev){if(!prev.length)return prev;var next=prev.slice();var last=next.pop();setOpts(JSON.parse(last));return next;});show("Undo");}
   useEffect(function(){function onKey(e){if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();undo();}}window.addEventListener("keydown",onKey);return function(){window.removeEventListener("keydown",onKey);};},[]);
   function show(msg){setToast(msg);setTimeout(function(){setToast("");},2500);}
-  function regen(bc,ds,seed,ps,tb,tr){var sz=ps||paletteSize;var b=tb||toneBases;var r=tr||toneReverse;setOpts([generatePalettes(bc,0,ds,seed,sz),generatePalettes(bc,1,ds,seed,sz),generatePalettes(bc,2,ds,seed,sz,b[2],r[2]),generatePalettes(bc,3,ds,seed,sz,b[3],r[3])]);}
+  function regen(bc,ds,seed,ps,tb,tr){var sz=ps||paletteSize;var b=tb||toneBases;var r=tr||toneReverse;setOpts([generatePalettes(bc,0,ds,seed,sz,b[0]),generatePalettes(bc,1,ds,seed,sz,b[1]),generatePalettes(bc,2,ds,seed,sz,b[2],r[2]),generatePalettes(bc,3,ds,seed,sz,b[3],r[3])]);}
 
   useEffect(function(){sbFetchBrands().then(function(b){setBrands(b);setLoaded(true);});},[]);
   useEffect(function(){if(!loaded)return;if(!activeBrand){regen([],darkStroke,reworkSeed,paletteSize);setBrandColors([]);}},[loaded,activeBrand]);
@@ -979,13 +983,14 @@ export default function App() {
       /* Backwards compat: pad older 3-element saved palettes up to 4 options */
       while(p.length<4){p.push(generatePalettes(b.colors,p.length,ds,0,paletteSize));}
       setOpts(p);
-      /* Restore tone base selection + ramp direction from the saved palettes */
-      var nb={2:[],3:[]},nr={2:false,3:false};
-      [2,3].forEach(function(oi){if(p[oi]&&p[oi].bases)nb[oi]=p[oi].bases;if(p[oi]&&p[oi].reverse)nr[oi]=true;});
+      /* Restore base selection (all tabs) + tone ramp direction from saved palettes */
+      var nb={0:[],1:[],2:[],3:[]},nr={2:false,3:false};
+      [0,1,2,3].forEach(function(oi){if(p[oi]&&p[oi].bases)nb[oi]=p[oi].bases;});
+      [2,3].forEach(function(oi){if(p[oi]&&p[oi].reverse)nr[oi]=true;});
       setToneBases(nb);setToneReverse(nr);
     }else{
-      setToneBases({2:[],3:[]});setToneReverse({2:false,3:false});
-      regen(b.colors,ds,0,paletteSize,{2:[],3:[]},{2:false,3:false});
+      setToneBases({0:[],1:[],2:[],3:[]});setToneReverse({2:false,3:false});
+      regen(b.colors,ds,0,paletteSize,{0:[],1:[],2:[],3:[]},{2:false,3:false});
     }
   },[brands]);
 
@@ -1502,28 +1507,31 @@ export default function App() {
         <button onClick={reworkAll} style={{marginLeft:"auto",padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Rework Colors</button>
         <button onClick={downloadPptx} style={{padding:"5px 14px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:12,fontWeight:600,cursor:"pointer"}}>Download PPTX</button>
       </div>
-      {/* Tone base selector (Tone tabs only) */}
-      {activeOpt>=2&&(function(){
+      {/* Color-source selector (all tabs) */}
+      {brandColors.length>0&&(function(){
+        var isToneTab=activeOpt>=2;
         var sel=toneBases[activeOpt]||[];
         function isSel(hex){for(var i=0;i<sel.length;i++){if(sel[i].hex.toLowerCase()===hex.toLowerCase())return true;}return false;}
         var nb=sel.length;
         var dist=[];
-        if(nb>0){var per=Math.floor(paletteSize/nb);var rem=paletteSize-per*nb;for(var di=0;di<nb;di++){dist.push(per+(di<rem?1:0));}}
+        if(isToneTab&&nb>0){var per=Math.floor(paletteSize/nb);var rem=paletteSize-per*nb;for(var di=0;di<nb;di++){dist.push(per+(di<rem?1:0));}}
         var lbl={fontSize:11,fontFamily:"'Space Mono',monospace",color:"#666",letterSpacing:"0.1em",textTransform:"uppercase"};
+        var hint=isToneTab?(nb===0?"auto-selected bases":dist.join(" + ")+" tones"):(nb===0?"using all brand colors":nb+" of "+brandColors.length+" colors");
         return (<div style={{maxWidth:1200,margin:"8px auto 0",padding:"0 16px"}}>
           <div style={{backgroundColor:"#fff",borderRadius:10,padding:"10px 14px",border:"1px solid #eee",display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={lbl}>Tone Bases</span>
-            {brandColors.length>0&&(<div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>{brandColors.map(function(c,i){var on=isSel(c.hex);return (<div key={i} onClick={function(){toggleToneBase(activeOpt,{hex:c.hex,name:c.name,isBrand:true});}} title={c.name} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px 3px 4px",borderRadius:20,border:on?"2px solid #ff8800":"1px solid #ddd",backgroundColor:on?"#fff5e6":"#fafafa",cursor:"pointer"}}><div style={{width:18,height:18,borderRadius:9,backgroundColor:c.hex,border:"1px solid rgba(0,0,0,0.1)"}} /><span style={{fontSize:11,fontFamily:"'Outfit',sans-serif",color:"#444",fontWeight:on?700:400}}>{c.name}</span></div>);})}</div>)}
-            {/* Custom-color bases (non-brand) */}
+            <span style={lbl}>{isToneTab?"Tone Bases":"Brand Colors"}</span>
+            <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>{brandColors.map(function(c,i){var on=isSel(c.hex);return (<div key={i} onClick={function(){toggleToneBase(activeOpt,{hex:c.hex,name:c.name,isBrand:true});}} title={c.name} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px 3px 4px",borderRadius:20,border:on?"2px solid #ff8800":"1px solid #ddd",backgroundColor:on?"#fff5e6":"#fafafa",cursor:"pointer"}}><div style={{width:18,height:18,borderRadius:9,backgroundColor:c.hex,border:"1px solid rgba(0,0,0,0.1)"}} /><span style={{fontSize:11,fontFamily:"'Outfit',sans-serif",color:"#444",fontWeight:on?700:400}}>{c.name}</span></div>);})}</div>
+            {/* Custom-color picks (non-brand) */}
             {sel.filter(function(s){return s.isBrand===false;}).map(function(s,i){return (<div key={"c"+i} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 6px 3px 4px",borderRadius:20,border:"2px solid #ff8800",backgroundColor:"#fff5e6"}}><div style={{width:18,height:18,borderRadius:9,backgroundColor:s.hex,border:"1px solid rgba(0,0,0,0.1)"}} /><span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#444"}}>{s.hex.toUpperCase()}</span><button onClick={function(){toggleToneBase(activeOpt,{hex:s.hex,name:s.hex,isBrand:false});}} style={{border:"none",background:"transparent",color:"#999",fontSize:15,lineHeight:1,cursor:"pointer",padding:0}}>&times;</button></div>);})}
             {/* Add custom color */}
             <div style={{display:"flex",alignItems:"center",gap:5}}>
               <div style={{position:"relative",width:24,height:24,borderRadius:6,backgroundColor:customHex,border:"2px solid #ddd",cursor:"pointer",overflow:"hidden"}}><input type="color" value={customHex} onChange={function(e){setCustomHex(e.target.value);}} style={{position:"absolute",inset:-4,width:"140%",height:"140%",cursor:"pointer",opacity:0}} /></div>
               <button onClick={function(){if(!isSel(customHex))toggleToneBase(activeOpt,{hex:customHex,name:customHex,isBrand:false});}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Custom</button>
             </div>
-            {/* Reverse direction */}
-            <button onClick={function(){setToneReverseFor(activeOpt,!toneReverse[activeOpt]);}} style={{marginLeft:"auto",padding:"4px 12px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Space Mono',monospace"}}>{toneReverse[activeOpt]?"Light → Dark":"Dark → Light"}</button>
-            <span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#999"}}>{nb===0?"auto-selected bases":dist.join(" + ")+" tones"}</span>
+            {sel.length>0&&(<button onClick={function(){setToneBasesFor(activeOpt,[]);}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #eee",backgroundColor:"#fafafa",color:"#888",fontSize:11,fontWeight:600,cursor:"pointer"}}>Clear</button>)}
+            {/* Reverse direction (tone tabs only) */}
+            {isToneTab&&(<button onClick={function(){setToneReverseFor(activeOpt,!toneReverse[activeOpt]);}} style={{marginLeft:"auto",padding:"4px 12px",borderRadius:6,border:"1px solid #ddd",backgroundColor:"#fff",color:"#555",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Space Mono',monospace"}}>{toneReverse[activeOpt]?"Light → Dark":"Dark → Light"}</button>)}
+            <span style={{fontSize:11,fontFamily:"'Space Mono',monospace",color:"#999",marginLeft:isToneTab?0:"auto"}}>{hint}</span>
           </div>
         </div>);
       })()}
