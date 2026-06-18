@@ -608,24 +608,44 @@ function generateTonedRange(brandColors, toneIdx, darkBg, reworkSeed, paletteSiz
   var tonesPerBase = Math.floor(paletteSize / nb);
   var remainder = paletteSize - tonesPerBase * nb;
 
-  /* Generate a tonal ramp per base, grouped in base order */
+  /* Find the lightness window where a hue/sat passes AA (4.5:1) on a given bg. */
+  /* Light bg → dark colors pass (low L); dark bg → light colors pass (high L). */
+  function passRange(h, s, bg) {
+    var lo = -1, hi = -1;
+    for (var L = 4; L <= 96; L++) {
+      if (CR(hsl2hex(h, s, L), bg) >= 4.5) { if (lo < 0) lo = L; hi = L; }
+    }
+    return lo < 0 ? null : [lo, hi];
+  }
+
+  var dBgc = darkBg || "#121212";
+
+  /* Generate a tonal ramp per base, grouped in base order. */
+  /* Light and dark variants each spread evenly across their own AA-passing   */
+  /* window so adjacent tones stay distinct even when the stroke color sits   */
+  /* close to the base hue (e.g. navy stroke under blue tones).               */
   var allSlots = [];
   for (var ti = 0; ti < nb; ti++) {
     var base = bases[ti];
     var nTones = tonesPerBase + (ti < remainder ? 1 : 0);
     if (nTones < 1) nTones = 1;
+    var sat = base.sat;
+    var wR = passRange(base.hue, sat, "#ffffff") || [16, 70];
+    var dR = passRange(base.hue, sat, dBgc) || [60, 92];
+    /* Trim extremes (avoid near-black / near-white); relax if window is tiny */
+    var wLo = Math.max(wR[0], 16), wHi = Math.min(wR[1], 80); if (wHi - wLo < 12) { wLo = wR[0]; wHi = wR[1]; }
+    var dLo = Math.max(dR[0], 28), dHi = Math.min(dR[1], 92); if (dHi - dLo < 12) { dLo = dR[0]; dHi = dR[1]; }
     for (var vi = 0; vi < nTones; vi++) {
-      var t = nTones > 1 ? vi / (nTones - 1) : 0.4;
+      var t = nTones > 1 ? vi / (nTones - 1) : 0.5;
       /* Direction: dark→light by default, reversed to light→dark on toggle */
       var lf = reverse ? (1 - t) : t;
-      var targetL = 24 + lf * 56;                 /* 24% (dark) → 80% (light) */
-      var targetS = Math.min(95, Math.max(20, base.sat - Math.round((1 - lf) * 6)));
-      var targetH = base.hue;                     /* hue fixed → reads as same family */
-      var lHex = adjustForContrast(hsl2hex(targetH, targetS, targetL), "#ffffff", 4.5);
-      var dHex = adjustForContrast(hsl2hex(targetH, targetS, targetL), darkBg || "#121212", 4.5);
+      var lL = wLo + lf * (wHi - wLo);
+      var dL = dLo + lf * (dHi - dLo);
+      var lHex = adjustForContrast(hsl2hex(base.hue, sat, lL), "#ffffff", 4.5);
+      var dHex = adjustForContrast(hsl2hex(base.hue, sat, dL), dBgc, 4.5);
       var toneLabel = nTones === 1 ? base.name : base.name + " " + (vi + 1);
       allSlots.push({
-        hue: targetH, sat: targetS, lightHex: lHex, darkHex: dHex,
+        hue: base.hue, sat: sat, lightHex: lHex, darkHex: dHex,
         label: toneLabel, swapped: base.isBrand ? base.name : null, baseIdx: ti
       });
     }
