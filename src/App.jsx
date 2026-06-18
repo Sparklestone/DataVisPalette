@@ -1090,18 +1090,20 @@ export default function App() {
     /* Recolor one L/D slide via positional text-label + fill replacement */
     function processSlide(xml, slideMap, optionLabel) {
       xml = repairXml(xml);
-      /* Structural fills to leave alone. 000064/000063 are the template's dark-
-         stroke borders + dark background — keep them so the global replace below
-         turns them into the real dark-stroke color instead of a swatch color. */
-      var STRUCT = {"222222":1,"FFFFFF":1,"D3D3D3":1,"888888":1,"000064":1,"000063":1};
+      /* Protect dark-stroke borders ONLY (srgbClr inside <a:ln>) so they aren't
+         recolored as swatch fills. A swatch fill that happens to equal 000064
+         (e.g. a dark brand color) must still be recolored normally. */
+      xml = xml.split('<a:ln><a:solidFill><a:srgbClr val="000064"/>').join('<a:ln><a:solidFill><a:srgbClr val="__DKSTK__"/>');
+      xml = xml.split('<a:ln><a:solidFill><a:srgbClr val="000063"/>').join('<a:ln><a:solidFill><a:srgbClr val="__DKSTK__"/>');
+      var STRUCT = {"222222":1,"FFFFFF":1,"D3D3D3":1,"888888":1};
       var textEntries = [];
       var textRe = /#([A-F0-9]{6})(?=[^A-F0-9])/g;
       var m, idx = 0;
       while ((m = textRe.exec(xml)) !== null && idx < slideMap.length) {
-        textEntries.push({pos: m.index + 1, len: 6, newHex: slideMap[idx]});
+        textEntries.push({pos: m.index + 1, newHex: slideMap[idx]});
         idx++;
       }
-      var fillEntries = [];
+      var fillEntries = [], stripFills = [];
       var fillRe = /srgbClr val="([A-F0-9]{6})"/g;
       var fm;
       while ((fm = fillRe.exec(xml)) !== null) {
@@ -1111,16 +1113,23 @@ export default function App() {
           if (textEntries[t].pos > fm.index) { nextText = textEntries[t]; break; }
         }
         if (nextText && (nextText.pos - fm.index) < 1500) {
-          fillEntries.push({pos: fm.index + 13, len: 6, val: nextText.newHex});
+          fillEntries.push({pos: fm.index + 13, val: nextText.newHex});
+        } else if (fm[1] !== "000064" && fm[1] !== "000063") {
+          /* Unpaired non-structural fill (not the dark bg) → brand-strip swatch */
+          stripFills.push({pos: fm.index + 13});
         }
       }
       var allR = [];
-      for (var ti = 0; ti < textEntries.length; ti++) allR.push({pos:textEntries[ti].pos, len:6, val:textEntries[ti].newHex});
-      for (var fi2 = 0; fi2 < fillEntries.length; fi2++) allR.push({pos:fillEntries[fi2].pos, len:6, val:fillEntries[fi2].val});
+      for (var ti = 0; ti < textEntries.length; ti++) allR.push({pos:textEntries[ti].pos, val:textEntries[ti].newHex});
+      for (var fi2 = 0; fi2 < fillEntries.length; fi2++) allR.push({pos:fillEntries[fi2].pos, val:fillEntries[fi2].val});
+      for (var bs = 0; bs < stripFills.length; bs++) {
+        var bc = bs < brandColors.length ? brandColors[bs].hex.replace("#","").toUpperCase() : "FFFFFF";
+        allR.push({pos: stripFills[bs].pos, val: bc});
+      }
       allR.sort(function(a, b) { return b.pos - a.pos; });
       for (var r = 0; r < allR.length; r++) {
         var rp = allR[r];
-        xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + rp.len);
+        xml = xml.substring(0, rp.pos) + rp.val + xml.substring(rp.pos + 6);
       }
       xml = xml.split('val="000064"').join('val="' + NDARK + '"');
       xml = xml.split('val="000063"').join('val="' + NDARK + '"');
@@ -1128,6 +1137,7 @@ export default function App() {
       xml = xml.split("Option 1").join(optionLabel);
       /* Thicken swatch outlines (template strokes have no explicit width) */
       xml = xml.split("<a:ln><a:solidFill>").join('<a:ln w="19050"><a:solidFill>');
+      xml = xml.split('val="__DKSTK__"').join('val="' + NDARK + '"');
       return xml;
     }
 
@@ -1165,20 +1175,32 @@ export default function App() {
     function textSp(id,x,y,w,h,t,sz,b,color,anchor) {
       return '<p:sp><p:nvSpPr><p:cNvPr id="'+id+'" name="t'+id+'"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="'+Math.round(x)+'" y="'+Math.round(y)+'"/><a:ext cx="'+Math.round(w)+'" cy="'+Math.round(h)+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0" anchor="'+(anchor||"ctr")+'"/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="'+sz+'" b="'+(b?1:0)+'" dirty="0"><a:solidFill><a:srgbClr val="'+color+'"/></a:solidFill><a:latin typeface="+mn-lt"/></a:rPr><a:t>'+esc(t)+'</a:t></a:r></a:p></p:txBody></p:sp>';
     }
-    function summarySlide(rows, nSw) {
+    function summarySlide(groups, nSw, hasL, hasD) {
       var id = 100, shapes = [];
-      shapes.push(textSp(id++, MARGIN, 260000, SLIDE_W-2*MARGIN, 620000, brandName + " — Palette Options", 2400, true, "222222", "ctr"));
-      var rowsTop = 1150000, rowsBottom = SLIDE_H - 420000, availH = rowsBottom - rowsTop;
-      var rowPitch = availH / Math.max(1, rows.length);
-      var labelW = 2300000, swX = MARGIN + labelW, swAreaW = SLIDE_W - MARGIN - swX;
-      var gap = 60000, swW = (swAreaW - gap*(nSw-1)) / nSw, swH = Math.min(rowPitch*0.55, 760000);
-      for (var ri = 0; ri < rows.length; ri++) {
-        var row = rows[ri], rowY = rowsTop + ri*rowPitch, swatchY = rowY + (rowPitch - swH)/2;
-        shapes.push(textSp(id++, MARGIN, rowY, labelW-120000, rowPitch, row.label, 1300, true, "333333", "ctr"));
-        for (var i = 0; i < row.colors.length; i++) {
-          var x = swX + i*(swW+gap), stroke = row.mode === "D" ? NDARK : "FFFFFF";
-          shapes.push(rectSp(id++, x, swatchY, swW, swH, row.colors[i], stroke, 28575));
-        }
+      shapes.push(textSp(id++, MARGIN, 170000, SLIDE_W-2*MARGIN, 500000, brandName + " — Palette Options", 2400, true, "222222", "ctr"));
+      var labelW = 1300000, colGap = 300000;
+      var contentX = MARGIN + labelW, contentW = SLIDE_W - MARGIN - contentX;
+      var halfW = (contentW - colGap) / 2;
+      var lightX = contentX, darkX = contentX + halfW + colGap;
+      var innerGap = halfW*0.045, swAreaW = halfW*0.60, chartW = halfW*0.355;
+      var headY = 740000;
+      if (hasL) shapes.push(textSp(id++, lightX, headY, halfW, 280000, "LIGHT", 1100, true, "888888", "ctr"));
+      if (hasD) shapes.push(textSp(id++, darkX, headY, halfW, 280000, "DARK", 1100, true, "888888", "ctr"));
+      var rowsTop = 1110000, rowsBottom = SLIDE_H - 300000, availH = rowsBottom - rowsTop;
+      var rowPitch = availH / Math.max(1, groups.length);
+      var gap = 28000, swW = (swAreaW - gap*(nSw-1)) / nSw, swH = Math.min(rowPitch*0.40, 420000);
+      var chH = Math.min(rowPitch*0.58, 600000);
+      var data = [82,54,71,38,63,47,29,55,45], mx = 82;
+      function miniChart(x, cy, colors, dark) {
+        var n = Math.min(colors.length, data.length), bw = chartW/n, barW = bw*0.72;
+        if (dark) shapes.push(rectSp(id++, x-22000, cy-22000, chartW+44000, chH+44000, NDARK, NDARK, 6350));
+        for (var i = 0; i < n; i++) { var bh = Math.max(24000, chH*(data[i]/mx)); shapes.push(rectSp(id++, x+i*bw, cy+(chH-bh), barW, bh, colors[i], dark?NDARK:"FFFFFF", 6350)); }
+      }
+      for (var ri = 0; ri < groups.length; ri++) {
+        var g = groups[ri], rowY = rowsTop + ri*rowPitch, swatchY = rowY + (rowPitch - swH)/2, chartY = rowY + (rowPitch - chH)/2;
+        shapes.push(textSp(id++, MARGIN, rowY, labelW-80000, rowPitch, g.label, 1400, true, "333333", "ctr"));
+        if (g.light) { for (var li = 0; li < g.light.length; li++) shapes.push(rectSp(id++, lightX+li*(swW+gap), swatchY, swW, swH, g.light[li], "FFFFFF", 19050)); miniChart(lightX+swAreaW+innerGap, chartY, g.light, false); }
+        if (g.dark)  { for (var dii = 0; dii < g.dark.length; dii++) shapes.push(rectSp(id++, darkX+dii*(swW+gap), swatchY, swW, swH, g.dark[dii], NDARK, 19050)); miniChart(darkX+swAreaW+innerGap, chartY, g.dark, true); }
       }
       return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' + shapes.join("") + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
     }
@@ -1244,14 +1266,15 @@ export default function App() {
           sldIds.push('<p:sldId id="'+(sldIdCounter++)+'" r:id="'+rid+'"/>');
         }
 
-        var summaryRows = [];
+        var summaryGroups = [];
         for (var ci = 0; ci < chosen.length; ci++) {
           var oi = chosen[ci], A2 = arraysFor(opts[oi]);
-          if (sel.light) { cloneOptionSlide(oi, false); summaryRows.push({label: OPT_LABELS[oi]+" · Light", mode:"L", colors: A2.NLC}); }
-          if (sel.dark)  { cloneOptionSlide(oi, true);  summaryRows.push({label: OPT_LABELS[oi]+" · Dark",  mode:"D", colors: A2.NDC}); }
+          if (sel.light) cloneOptionSlide(oi, false);
+          if (sel.dark)  cloneOptionSlide(oi, true);
+          summaryGroups.push({label: OPT_LABELS[oi], light: sel.light ? A2.NLC : null, dark: sel.dark ? A2.NDC : null});
         }
         var ssn = slideCounter++;
-        zip.file("ppt/slides/slide"+ssn+".xml", summarySlide(summaryRows, palSize));
+        zip.file("ppt/slides/slide"+ssn+".xml", summarySlide(summaryGroups, palSize, sel.light, sel.dark));
         zip.file("ppt/slides/_rels/slide"+ssn+".xml.rels", SUMMARY_RELS);
         ctOverrides.push('<Override PartName="/ppt/slides/slide'+ssn+'.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>');
         var srid = "rId" + (ridCounter++);
